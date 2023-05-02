@@ -1,7 +1,14 @@
 const path = require('path');
 
 module.exports = {
-    entry: './src/index.ts',
+    entry: {
+        index: './src/index.ts',
+    },
+    externals: {
+        jquery: 'jQuery',
+        jsxgraph: 'JXG',
+        bootstrap: 'bootstrap'
+    },
     module: {
         rules: [
             {
@@ -15,8 +22,7 @@ module.exports = {
         extensions: ['.tsx', '.ts', '.js'],
     },
     output: {
-        filename: 'index.js',
+        filename: '[name].js',
         path: path.resolve(__dirname, 'dist'),
-    },
-    mode: 'development'
+    }
 };

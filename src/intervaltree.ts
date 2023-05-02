@@ -1,11 +1,15 @@
 import {Line} from 'jsxgraph';
 import {getPointsOrdered, horizontalRelation} from './utils';
-import * as assert from 'assert';
 
 export type TreeNode = {
     parent?: TreeNode,
     childLeft?: TreeNode,
     childRight?: TreeNode,
+
+    depth: number,
+    height: number,
+    npeer: number,
+
     median: number,
     linesLeftSorted: Line[],
     linesRightSorted: Line[]
@@ -13,6 +17,7 @@ export type TreeNode = {
 
 export class IntervalTree {
     readonly root: Readonly<TreeNode>;
+    readonly height: number;
 
     constructor(lines: Line[]) {
         let linesLeftSorted = lines.slice(),
@@ -21,10 +26,11 @@ export class IntervalTree {
             getPointsOrdered(l1)[0].coords.usrCoords[1] - getPointsOrdered(l2)[0].coords.usrCoords[1]);
         linesRightSorted.sort((l1, l2) =>
             getPointsOrdered(l2)[1].coords.usrCoords[1] - getPointsOrdered(l1)[1].coords.usrCoords[1]);
-        this.root = this.makeNode(undefined, linesLeftSorted, linesRightSorted) as TreeNode;
+        this.root = this.makeNode(undefined, linesLeftSorted, linesRightSorted, 1) as TreeNode;
+        this.height = this.root.height;
     }
 
-    private makeNode(parent: TreeNode | undefined, linesLeftSorted: Line[], linesRightSorted: Line[]) {
+    private makeNode(parent: TreeNode | undefined, linesLeftSorted: Line[], linesRightSorted: Line[], npeer: number) {
         const n = linesLeftSorted.length;
 
         // base case
@@ -35,6 +41,11 @@ export class IntervalTree {
             parent: parent,
             childLeft: undefined,
             childRight: undefined,
+
+            depth: parent === undefined ? 0 : parent.depth + 1,
+            height: 1,
+            npeer: npeer,
+
             median: 0,
             linesLeftSorted: [],
             linesRightSorted: []
@@ -73,8 +84,11 @@ export class IntervalTree {
         }
 
         // do recursion
-        v.childLeft = this.makeNode(v, ll, lr);
-        v.childRight = this.makeNode(v, rl, rr);
+        v.childLeft = this.makeNode(v, ll, lr, npeer * 2 - 1);
+        v.childRight = this.makeNode(v, rl, rr, npeer * 2);
+
+        if (v.childLeft !== undefined) v.height = v.childLeft.height + 1;
+        if (v.childRight !== undefined) v.height = Math.max(v.height, v.childRight.height + 1);
 
         return v;
     }

@@ -1,15 +1,15 @@
 export type AlgorithmState = 'add' | 'build' | 'query';
-type AlgoStateListener = (newState: AlgorithmState, oldState: AlgorithmState) => void;
+type StateChangeListener = (newState: AlgorithmState, oldState: AlgorithmState) => void;
 
 /**
  * Works as the model in MVC design pattern,
  * notifies the views when updating
  */
 export class StateManager {
-    private state: AlgorithmState = 'add';
-    private listeners: AlgoStateListener[] = [];
+    state: AlgorithmState = 'add';
+    private listeners: StateChangeListener[] = [];
 
-    addListener(listener: AlgoStateListener) {
+    onChange(listener: StateChangeListener) {
         this.listeners.push(listener);
     }
 
@@ -22,11 +22,11 @@ export class StateManager {
             listener(newState, oldState);
     }
 
-    finishAdding() {
-        this.setState('build')
-    }
-
-    isAdding() {
-        return this.state === 'add';
+    next() {
+        if (this.state === 'add') {
+            this.setState('build');
+        } else if (this.state === 'build') {
+            this.setState('query');
+        }
     }
 }
