@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "webpack": "webpack"
+  },
+  "devDependencies": {
+    "ts-loader": "^9.4.2",
+    "typescript": "^5.0.4",
+    "webpack": "^5.81.0",
+    "webpack-cli": "^5.0.2"
+  },
+  "dependencies": {
+    "@types/bootstrap": "^4.6.2",
+    "@types/jquery": "^3.5.16",
+    "jquery": "^3.6.4",
+    "jsxgraph": "^1.5.0"
+  }
+}
