@@ -1,6 +1,6 @@
 import {Board, JSXGraph, Line, Point} from 'jsxgraph';
 
-import {ListCoords, random} from './utils';
+import {ArrayCoords, random} from './utils';
 
 const PLOT_XMIN = -10, PLOT_XMAX = 10,
     PLOT_YMIN = -10, PLOT_YMAX = 10;
@@ -62,12 +62,13 @@ export class PlotBoard {
             if (obj.getType() === 'line' || obj.getType() === 'point') obj.isDraggable = false;
     }
 
-    newSegment(coords1: ListCoords, coords2: ListCoords) {
+    newSegment(coords1: ArrayCoords, coords2: ArrayCoords) {
         if (!this.acceptChanges) throw new Error('Board is frozen, new segments are not accepted.');
 
         let p1 = this.board.create('point', coords1, {withLabel: false}),
             p2 = this.board.create('point', coords2, {withLabel: false}),
-            l = this.board.create('line', [p1, p2], {straightFirst: false, straightLast: false});
+            l = this.board.create('line', [p1, p2],
+                {straightFirst: false, straightLast: false});
 
         // make lines still horizontal when adjusting
         p1.on('drag', () =>
