@@ -1,29 +1,29 @@
-import {Line} from 'jsxgraph';
+import {Segment} from 'jsxgraph';
 import {endpoints, horizontalRelation} from './utils';
 
 export type TreeNode = {
     parent?: TreeNode, childLeft?: TreeNode, childRight?: TreeNode,
     depth: number, height: number, peerIdx: number,
-    median: number, linesLeftSorted: Line[], linesRightSorted: Line[]
+    median: number, segmentsLeftSorted: Segment[], segmentsRightSorted: Segment[]
 }
 
 export class IntervalTree {
     readonly root: Readonly<TreeNode>;
-    readonly nodes: (TreeNode | undefined)[] = []; // a list of nodes, some positions might be undefined
+    readonly nodes: (TreeNode | undefined)[] = []; // a sparse list of nodes
     readonly height: number;
 
-    constructor(lines: Line[]) {
-        let linesLeftSorted = lines.slice(),
-            linesRightSorted = lines.slice();
-        linesLeftSorted.sort((l1, l2) =>
+    constructor(segments: Segment[]) {
+        let segmentsLeftSorted = segments.slice(),
+            segmentsRightSorted = segments.slice();
+        segmentsLeftSorted.sort((l1, l2) =>
             endpoints(l1).left.coords.usrCoords[1] - endpoints(l2).left.coords.usrCoords[1]);
-        linesRightSorted.sort((l1, l2) =>
+        segmentsRightSorted.sort((l1, l2) =>
             endpoints(l2).right.coords.usrCoords[1] - endpoints(l1).right.coords.usrCoords[1]);
-        this.root = this.makeNode(undefined, linesLeftSorted, linesRightSorted, 0) as TreeNode;
+        this.root = this.makeNode(undefined, segmentsLeftSorted, segmentsRightSorted, 0) as TreeNode;
         this.height = this.root.height;
     }
 
-    private makeNode(parent: TreeNode | undefined, linesLeftSorted: Line[], linesRightSorted: Line[], peerIdx: number) {
+    private makeNode(parent: TreeNode | undefined, linesLeftSorted: Segment[], linesRightSorted: Segment[], peerIdx: number) {
         const n = linesLeftSorted.length;
 
         if (n === 0) return undefined; // base case
@@ -31,7 +31,7 @@ export class IntervalTree {
         let v: TreeNode = {
             parent: parent, childLeft: undefined, childRight: undefined,
             depth: parent === undefined ? 0 : parent.depth + 1, height: 1, peerIdx: peerIdx,
-            median: 0, linesLeftSorted: [], linesRightSorted: []
+            median: 0, segmentsLeftSorted: [], segmentsRightSorted: []
         }
 
         // find median
@@ -52,14 +52,14 @@ export class IntervalTree {
         }
 
         // split two sorted lists according to relation to the median into 2 parts
-        let ll: Line[] = [], lr: Line[] = [], rl: Line[] = [], rr: Line[] = [];
+        let ll: Segment[] = [], lr: Segment[] = [], rl: Segment[] = [], rr: Segment[] = [];
         for (let l of linesLeftSorted) {
             let r = horizontalRelation(l, v.median);
-            (r < 0 ? ll : (r > 0 ? rl : v.linesLeftSorted)).push(l)
+            (r < 0 ? ll : (r > 0 ? rl : v.segmentsLeftSorted)).push(l)
         }
         for (let l of linesRightSorted) {
             let r = horizontalRelation(l, v.median);
-            (r < 0 ? lr : (r > 0 ? rr : v.linesRightSorted)).push(l)
+            (r < 0 ? lr : (r > 0 ? rr : v.segmentsRightSorted)).push(l)
         }
 
         // do recursion

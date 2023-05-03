@@ -18,8 +18,6 @@ $(() => {
         finishSubtree: $('#algo-finish-subtree')
     }
 
-    let treeboard: TreeBoard | undefined = undefined;
-
     plotboard.onNewSegment(() => algoBtn.start.prop('disabled', false));
     // populate with random segments
     populateForm.on('submit', event => {
@@ -30,7 +28,7 @@ $(() => {
     // stop accepting changes to the segments
     algoState.onChange(newState => {
         if (newState !== 'add') {
-            plotboard.stopAcceptingChanges();
+            plotboard.finalizeChanges();
             populateForm.find(':input').prop('disabled', true);
         }
     });
@@ -65,8 +63,56 @@ $(() => {
         }
     });
 
+    plotboard.setSortingEnd($('[name=sort-endpoint]:checked').val() as ('left' | 'right'));
+    $('[name=sort-endpoint]').each((idx, ele) => {
+        $(ele).on('change', event => {
+            plotboard.setSortingEnd($(event.target).val() as ('left' | 'right'))
+        })
+    });
+
+    function updateRecursionStatus(board: TreeBoard) {
+        algoBtn.recurse.prop('disabled', !board.canRecurse());
+        algoBtn.undoRecurse.prop('disabled', !board.canUndoRecurse());
+        algoBtn.finishSubtree.prop('disabled', !board.canFinishSubtree());
+
+        for (let node of board.tree.nodes) {
+            if (node === undefined) continue;
+            plotboard.setMedianVisibility(node.median, board.graphNode(node)!.getAttribute('visible'));
+        }
+    }
+
+    let treeboard: TreeBoard | undefined = undefined;
     algoState.onChange(newState => {
-        if (newState === 'build' && treeboard === undefined)
-            treeboard = new TreeBoard('treeboard', plotboard.getSegments());
+        if (newState === 'build' && treeboard === undefined) {
+            // setup treeboard
+            let treeboard = new TreeBoard('treeboard', plotboard.getSegments()) as TreeBoard;
+
+            algoState.onChange(newState => {
+                if (newState !== 'add') treeboard?.setSimulationMode(newState);
+            })
+
+            for (let n of treeboard.tree.nodes) {
+                if (n === undefined) continue;
+                plotboard.addMedian(n.median, n.segmentsLeftSorted,
+                    treeboard.graphNode(n)!.getAttribute('color'));
+            }
+
+            treeboard.onHoverNode(event => {
+                if (event.prevNode !== undefined) plotboard.removeMedian('hover');
+                if (event.node !== undefined) {
+                    plotboard.addMedian(event.node.median, event.node.segmentsLeftSorted,
+                        treeboard.graphNode(event.node)!.getAttribute('highlightFillColor'),
+                        true, 'hover')
+                }
+            });
+
+            treeboard.onRecursionUpdate(() => updateRecursionStatus(treeboard));
+
+            algoBtn.recurse.on('click', () => treeboard.recurse());
+            algoBtn.undoRecurse.on('click', () => treeboard.undoRecurse());
+            algoBtn.finishSubtree.on('click', () => treeboard.finishSubtree());
+
+            updateRecursionStatus(treeboard);
+        }
     });
 });

@@ -50,22 +50,38 @@
 
         <div class="col d-flex flex-column h-100 mw-50" style="max-width: 49%">
 
-<!--            <div class="row text-secondary">-->
-<!--                <small>In the left box:</small>-->
-<!--                <ul>-->
-<!--                    <li><small>Click and drag to create new segments.</small></li>-->
-<!--                    <li><small>Drag endpoints or segments to adjust.</small></li>-->
-<!--                    <li><small>Use <b>Generate</b> button to populate with random segments.</small></li>-->
-<!--                </ul>-->
-<!--            </div>-->
+            <!--            <div class="row text-secondary">-->
+            <!--                <small>In the left box:</small>-->
+            <!--                <ul>-->
+            <!--                    <li><small>Click and drag to create new segments.</small></li>-->
+            <!--                    <li><small>Drag endpoints or segments to adjust.</small></li>-->
+            <!--                    <li><small>Use <b>Generate</b> button to populate with random segments.</small></li>-->
+            <!--                </ul>-->
+            <!--            </div>-->
 
             <div class="row btn-group btn-group-sm" id="algo-buttons">
                 <button type="button" id="algo-start" class="btn btn-outline-success" disabled>Start Building</button>
+                <button type="button" id="algo-finish-subtree" class="btn btn-outline-primary" disabled>Finish Subtree
+                </button>
                 <button type="button" id="algo-recurse" class="btn btn-outline-primary" disabled>Recurse</button>
                 <button type="button" id="algo-undo-recurse" class="btn btn-outline-primary" disabled>Undo Recurse
                 </button>
-                <button type="button" id="algo-finish-subtree" class="btn btn-outline-primary" disabled>Finish Subtree
-                </button>
+            </div>
+
+            <div class="row mt-2">
+                <div class="custom-control custom-radio custom-control-inline">
+                    <input type="radio" class="custom-control-input" id="sort-endpoint-left" name="sort-endpoint" value="left" checked>
+                    <label class="custom-control-label" for="sort-endpoint-left">
+                        Show sorting of left endpoint
+                    </label>
+                </div>
+                <div class="custom-control custom-radio custom-control-inline">
+                    <input type="radio" class="custom-control-input" id="sort-endpoint-right" name="sort-endpoint" value="right">
+                    <label class="custom-control-label" for="sort-endpoint-right">
+                        Show sorting of right endpoint
+                    </label>
+                </div>
+
             </div>
 
             <div id="treeboard" class="jxgbox row flex-grow-1 mt-2"></div>
