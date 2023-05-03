@@ -1,6 +1,6 @@
 import {Board, JSXGraph, Line, Point, Segment} from 'jsxgraph';
 
-import {ArrayCoords, endpoints, horizontalRelation, hrange, Palette, random} from './utils';
+import {ArrayCoords, hrange, random} from './utils';
 
 const PLOT_XMIN = -10, PLOT_XMAX = 10,
     PLOT_YMIN = -10, PLOT_YMAX = 10;

@@ -1,4 +1,4 @@
-import {Line, Point, Segment} from 'jsxgraph';
+import {Line, Segment} from 'jsxgraph';
 
 export type ArrayCoords = [number, number];
 

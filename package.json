@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "webpack --mode production",
+    "build": "webpack --mode production && mv ./dist/index.js ./public/",
     "serve": "webpack serve --mode development"
   },
   "devDependencies": {

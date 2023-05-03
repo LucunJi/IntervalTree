@@ -1,9 +1,7 @@
-import {Board, JSXGraph, Line, palette, Point, Segment} from 'jsxgraph';
+import {Board, JSXGraph, Line, Point, Segment} from 'jsxgraph';
 
 import {IntervalTree, TreeNode} from './intervaltree';
 import {EventListener, Palette} from './utils';
-import * as inspector from 'inspector';
-import {cssNumber} from 'jquery';
 
 const TREE_XMIN = -10, TREE_XMAX = 10,
     TREE_YMIN = -10, TREE_YMAX = 10;
@@ -40,7 +38,7 @@ export class TreeBoard {
 
         this.initSimulation();
 
-        this.board.on('move', event => {
+        this.board.on('move', () => {
             let prevHovering = this.hoveringNode;
             this.hoveringNode = undefined;
             let idx = undefined;
