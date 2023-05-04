@@ -1,6 +1,6 @@
 import {Board, JSXGraph, Line, Point, Segment} from 'jsxgraph';
 
-import {ArrayCoords, hrange, random} from './utils';
+import {ArrayCoords, EventListener, hrange, random} from './utils';
 
 const PLOT_XMIN = -10, PLOT_XMAX = 10,
     PLOT_YMIN = -10, PLOT_YMAX = 10;
@@ -11,6 +11,7 @@ const SEGMENT_COLOR = '#0072b2',
     SEGMENT_ENDPOINT_COLOR_FIXED = '#1f1f1f';
 
 type SegmentListener = (p1: Readonly<Point>, p2: Readonly<Point>, l: Readonly<Line>) => void;
+type QueryLineChange = number;
 
 export class PlotBoard {
     board: Board;
@@ -28,13 +29,14 @@ export class PlotBoard {
     } = {};
     // medians visible on each segment (id)
     private segmentVisibleMedians: {
-        [key: string]:
-            (number | string | symbol)[]
+        [key: string]: (number | string | symbol)[]
     } = {};
 
     private newSegmentListeners: SegmentListener[] = [];
+    private queryLineChangeListeners: EventListener<QueryLineChange | undefined>[] = [];
 
     private creatingLine?: { p1: Point, p2: Point, l: Line }; // line currently creating
+    private queryLine: Line;
 
     private startAddingSegmentFunction = (event: PointerEvent) => {
         if (this.board.getAllObjectsUnderMouse(event).length > 0) return;
@@ -69,6 +71,14 @@ export class PlotBoard {
         this.board.on('down', this.startAddingSegmentFunction);
         this.board.on('move', this.moveEndpointWhenAddingFunction);
         this.board.on('up', this.releaseAddingSegmentFunction);
+
+        const initX = (PLOT_XMAX + PLOT_XMIN) / 2;
+        this.queryLine = this.board.create('line', [[initX, 0], [initX, 1]], {
+            visible: false, fixed: false, strokeColor: '#000', dragToTopOfLayer: true,
+            strokeOpacity: 0.5, strokeWidth: 3
+        });
+        this.queryLine.on('up', () =>
+            this.notifyQueryLineChange(this.queryLine.point1.coords.usrCoords[1]));
     }
 
     private newSegment(coords1: ArrayCoords, coords2: ArrayCoords) {
@@ -119,22 +129,21 @@ export class PlotBoard {
     }
 
     finalizeChanges() {
+        if (!this.acceptChanges) return;
         this.acceptChanges = false;
 
         this.board.off('down', this.startAddingSegmentFunction);
         this.board.off('move', this.moveEndpointWhenAddingFunction);
         this.board.off('up', this.releaseAddingSegmentFunction);
 
+        this.board.suspendUpdate();
         for (let i = 0; i < this.segments.length; i++) {
             let seg = this.segments[i];
-            this.board.suspendUpdate();
-
             seg.setAttribute({strokeColor: SEGMENT_COLOR_FIXED, fixed: true});
             seg.point1.setAttribute({color: SEGMENT_ENDPOINT_COLOR_FIXED, fixed: true});
             seg.point2.setAttribute({color: SEGMENT_ENDPOINT_COLOR_FIXED, fixed: true});
-
-            this.board.unsuspendUpdate();
         }
+        this.board.unsuspendUpdate();
 
         this.sortSegments();
     }
@@ -161,15 +170,20 @@ export class PlotBoard {
             minlength = xrange * 0.04;
 
         for (let i = 0; i < n; i++) {
-            let x1 = random(xmin, xmax - minlength),
-                x2 = random(x1 + minlength, xmax),
-                y = ymin + ystep * i;
-            this.newSegment([x1, y], [x2, y]);
+            const y = ymin + ystep * i;
+            while (true) {
+                let x1 = random(xmin, xmax),
+                    x2 = random(xmin, xmax);
+                if (Math.abs(x1 - x2) < minlength) continue;
+                this.newSegment([x1, y], [x2, y]);
+                break;
+            }
         }
     }
 
     addMedian(val: number, segments: Segment[], color: string,
               visible = false, key: number | string | symbol = val) {
+        if (this.medians[key] !== undefined) return false;
         this.medians[key] = {
             line: this.board.create('line', [[val, 0], [val, 1]], {
                 strokeColor: color, dash: 2, visible: false, fixed: true
@@ -177,16 +191,20 @@ export class PlotBoard {
             relatedSegments: segments,
             color: color
         };
-        this.setMedianVisibility(key, visible);
+        this.setMedianVisible(key, visible);
+        console.log(key)
+        return true;
     }
 
     removeMedian(key: number | string | symbol) {
-        this.setMedianVisibility(key, false);
+        if (this.medians[key] === undefined) return false;
+        this.setMedianVisible(key, false);
         this.board.removeObject(this.medians[key].line);
         delete this.medians[key];
+        return true;
     }
 
-    setMedianVisibility(key: number | string | symbol, visible: boolean) {
+    setMedianVisible(key: number | string | symbol, visible: boolean) {
         const median = this.medians[key];
         if (median === undefined || this.medians[key].line.getAttribute('visible') === visible)
             return;
@@ -204,7 +222,6 @@ export class PlotBoard {
             if (newlist.length > 0)
                 segColor = endColor = this.medians[newlist[newlist.length - 1]].color;
 
-            console.log(segColor, endColor, newlist)
             seg.setAttribute({strokeColor: segColor});
             seg.point1.setAttribute({color: endColor});
             seg.point2.setAttribute({color: endColor});
@@ -217,5 +234,18 @@ export class PlotBoard {
             this.sortingEnd = end;
             if (!this.acceptChanges) this.sortSegments();
         }
+    }
+
+    showQueryLine() {
+        this.queryLine.setAttribute({visible: true});
+        this.notifyQueryLineChange(this.queryLine.point1.coords.usrCoords[1]);
+    }
+
+    onQueryLineChange(l: EventListener<QueryLineChange>) {
+        this.queryLineChangeListeners.push(l);
+    }
+
+    notifyQueryLineChange(event: QueryLineChange) {
+        for (let l of this.queryLineChangeListeners) l(event);
     }
 }

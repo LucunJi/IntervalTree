@@ -32,15 +32,17 @@
 
         <div class="col d-flex flex-column h-100 mr-2" style="max-width: 49%">
 
-            <h1 class="row">Interval Tree</h1>
+            <h2 class="row">Interval Tree Visualization</h2>
 
+            <h5>Drawing Area</h5>
             <div id="plotboard" class="jxgbox row flex-grow-1"></div>
 
             <form id="populate" class="row mt-2 input-group input-group-sm">
                 <div class="input-group-prepend">
                     <label class="input-group-text" for="populate-count">Random segments (1-100): </label>
                 </div>
-                <input id="populate-count" class="form-control" type="number" value="10" min="1" max="100" required/>
+                <input id="populate-count" class="form-control" type="number" value="10" min="1" max="100"
+                       required/>
                 <div class="input-group-append">
                     <button id="populate-btn" class="btn btn-outline-secondary" type="submit">Generate</button>
                 </div>
@@ -49,44 +51,104 @@
 
 
         <div class="col d-flex flex-column h-100 mw-50" style="max-width: 49%">
+            <div class="row">
+                <div id="algo-buttons" class="btn-group btn-group-sm">
+                    <button type="button" id="algo-start" class="btn btn-outline-success" disabled>Start Building
+                    </button>
+                    <button type="button" id="algo-undo-recurse" class="btn btn-outline-primary" disabled>Undo Recurse
+                    </button>
+                    <button type="button" id="algo-recurse" class="btn btn-outline-primary" disabled>Recurse</button>
+                    <button type="button" id="algo-finish-subtree" class="btn btn-outline-primary" disabled>Finish
+                        Subtree
+                    </button>
+                </div>
 
-            <!--            <div class="row text-secondary">-->
-            <!--                <small>In the left box:</small>-->
-            <!--                <ul>-->
-            <!--                    <li><small>Click and drag to create new segments.</small></li>-->
-            <!--                    <li><small>Drag endpoints or segments to adjust.</small></li>-->
-            <!--                    <li><small>Use <b>Generate</b> button to populate with random segments.</small></li>-->
-            <!--                </ul>-->
-            <!--            </div>-->
+                <div class="pl-2">
 
-            <div class="row btn-group btn-group-sm" id="algo-buttons">
-                <button type="button" id="algo-start" class="btn btn-outline-success" disabled>Start Building</button>
-                <button type="button" id="algo-finish-subtree" class="btn btn-outline-primary" disabled>Finish Subtree
-                </button>
-                <button type="button" id="algo-recurse" class="btn btn-outline-primary" disabled>Recurse</button>
-                <button type="button" id="algo-undo-recurse" class="btn btn-outline-primary" disabled>Undo Recurse
-                </button>
+                    <button type="button" id="help" class="btn-sm btn btn-outline-info" data-toggle="modal"
+                            data-target="#help-modal">Help
+                    </button>
+                </div>
             </div>
+
 
             <div class="row mt-2">
                 <div class="custom-control custom-radio custom-control-inline">
-                    <input type="radio" class="custom-control-input" id="sort-endpoint-left" name="sort-endpoint" value="left" checked>
+                    <input type="radio" class="custom-control-input" id="sort-endpoint-left" name="sort-endpoint"
+                           value="left" checked>
                     <label class="custom-control-label" for="sort-endpoint-left">
-                        Show sorting of left endpoint
-                    </label>
-                </div>
-                <div class="custom-control custom-radio custom-control-inline">
-                    <input type="radio" class="custom-control-input" id="sort-endpoint-right" name="sort-endpoint" value="right">
-                    <label class="custom-control-label" for="sort-endpoint-right">
-                        Show sorting of right endpoint
+                        Show sorting of left endpoints
                     </label>
                 </div>
 
+                <div class="custom-control custom-radio custom-control-inline">
+                    <input type="radio" class="custom-control-input" id="sort-endpoint-right" name="sort-endpoint"
+                           value="right">
+                    <label class="custom-control-label" for="sort-endpoint-right">
+                        Show sorting of right endpoints
+                    </label>
+                </div>
             </div>
 
             <div id="treeboard" class="jxgbox row flex-grow-1 mt-2"></div>
         </div>
 
+    </div>
+</div>
+
+<div class="modal fade" id="help-modal" tabindex="-1" role="dialog" aria-labelledby="help-modal-label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="help-modal-label">About this applet</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <h5>How to use this applet</h5>
+                <ul>
+                    <li>Create new line segments by clicking and dragging in the <b>drawing area</b> on the left.</li>
+                    <li>You can also make random line segments by using the <b>Generate</b> button.</li>
+                    <li>Click on <b>Start Building</b> button on to finalize the segments and start building interval
+                        tree.
+                    </li>
+                </ul>
+
+                <p>Building Mode</p>
+
+                <ul>
+                    <li>In building mode, the median (dashed line) and segments stored on each tree node
+                        is displayed in the drawing area with the same color with the node.
+                    </li>
+                    <li>You can choose whether the lines are sorted by their left or right endpoints.</li>
+                    <li>Hover mouse on the nodes of the tree to see the corresponding median and segments in drawing area.</li>
+                    <li>Use <b>Recurse</b> button to recurse down the tree to either the left or right child node
+                        (depending on recursion status).
+                    </li>
+                    <li>Use <b>Undo Recurse</b> button to undo it.</li>
+                    <li>Use <b>Finish Subtree</b> button to finish the subtree on the current node and return to its
+                        parent.
+                    </li>
+                    <li>Click on <b>Start Query</b> button to proceed to the query mode.</li>
+                </ul>
+
+                <p>Query Mode</p>
+
+                <ul>
+                    <li>In query mode, <i>only the segments intersecting the querying position are colored gradually as you run the algorithm.</i></li>
+                    <li>Drag the <b>black vertical line</b> on the drawing area to select a query position.</li>
+                    <li>The Recurse and Undo Recurse buttons have the same functionality;
+                        but the Finish Subtree button is not available since querying algorithm does not branch.
+                    </li>
+                </ul>
+
+            </div>
+
+        </div>
     </div>
 </div>
 </body>
