@@ -60,6 +60,15 @@ export class TreeBoard {
 
 
     private drawTree() {
+        if (this.tree.height === 1) {
+            let coords = [(TREE_XMAX + TREE_XMIN) / 2, (TREE_YMAX + TREE_YMIN) / 2]
+            this.nodes[0] = this.board.create('point', coords, {
+                size: NODE_SIZE, sizeUnit: 'user', withLabel: false, strokeWidth: 4,
+                color: new Palette().get()
+            });
+            return;
+        }
+
         const xrange = (TREE_XMAX - TREE_XMIN) * 0.95,
             xmin = TREE_XMIN + (TREE_XMAX - TREE_XMIN - xrange) / 2,
             yrange = (TREE_YMAX - TREE_YMIN) * 0.8,
