@@ -43,6 +43,7 @@ $(() => {
     // action of #algo-start
     algoBtn.start.on('click', () => {
         if (algoState.state === 'add' && plotboard.getSegments().length === 0) return;
+        $('[name=sort-endpoint]').prop('disabled', false);
         if (algoState.state !== 'query') algoState.next();
         else window.location.reload();
     });
@@ -72,7 +73,7 @@ $(() => {
         $(ele).on('change', event => {
             plotboard.setSortingEnd($(event.target).val() as ('left' | 'right'))
         })
-    });
+    }).prop('disabled', true);
 
     function updateRecursionStatus(board: TreeBoard, currNode: TreeNode) {
         algoBtn.recurse.prop('disabled', !board.canRecurse());
