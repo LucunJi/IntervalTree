@@ -104,6 +104,13 @@ export class PlotBoard {
     }
 
     private sortSegments() {
+        if (this.segments.length === 1) {
+            let seg = this.segments[0], y = (PLOT_YMAX + PLOT_YMIN) / 2;
+            seg.point1.moveTo([seg.point1.coords.usrCoords[1], y], 400);
+            seg.point2.moveTo([seg.point2.coords.usrCoords[1], y], 400);
+            return;
+        }
+
         let segIndices = [], segOrder = [];
         for (let i = 0; i < this.segments.length; i++) segIndices.push(i);
         if (this.sortingEnd === 'left') {
@@ -164,16 +171,27 @@ export class PlotBoard {
         const xrange = (PLOT_XMAX - PLOT_XMIN) * 0.95,
             xmin = PLOT_XMIN + (PLOT_XMAX - PLOT_XMIN - xrange) / 2,
             xmax = xmin + xrange,
-            yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
-            ystep = yrange / (n - 1),
-            ymin = PLOT_YMIN + (PLOT_YMAX - PLOT_YMIN - yrange) / 2,
             minlength = xrange * 0.04;
+
+        if (n === 1) {
+            const y = (PLOT_YMAX + PLOT_YMIN) / 2;
+            while (true) {
+                let x1 = random(xmin, xmax), x2 = random(xmin, xmax);
+                if (Math.abs(x1 - x2) < minlength) continue;
+                this.newSegment([x1, y], [x2, y]);
+                break;
+            }
+            return;
+        }
+
+        const yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
+            ystep = yrange / (n - 1),
+            ymin = PLOT_YMIN + (PLOT_YMAX - PLOT_YMIN - yrange) / 2;
 
         for (let i = 0; i < n; i++) {
             const y = ymin + ystep * i;
             while (true) {
-                let x1 = random(xmin, xmax),
-                    x2 = random(xmin, xmax);
+                let x1 = random(xmin, xmax), x2 = random(xmin, xmax);
                 if (Math.abs(x1 - x2) < minlength) continue;
                 this.newSegment([x1, y], [x2, y]);
                 break;
@@ -192,7 +210,6 @@ export class PlotBoard {
             color: color
         };
         this.setMedianVisible(key, visible);
-        console.log(key)
         return true;
     }
 
