@@ -55,3 +55,6 @@ I do not choose Bootstrap 5 for better compatibility with earlier browsers.
 - Currently, I only use the Listener design pattern to manage the communication between different components (e.g. buttons, drawing area, and segment tree).
 This alone does not make the code loosely coupled enough (so things are entangled together).
 I can use more design patterns, such as MVC and Visitor, to make the code more scalable and maintainable.
+
+- This project is kind of a proof-of-concept in the sense that it helps me to get familiar with using Typescript, webpack and JSXGraph together.
+If this design is proved to be favorable, we can improve it and then rewrite other demos in the same style for fewer errors and more compatible.
