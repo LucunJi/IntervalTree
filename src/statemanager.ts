@@ -1,5 +1,8 @@
 export type AlgorithmState = 'add' | 'build' | 'query';
-type StateChangeListener = (newState: AlgorithmState, oldState: AlgorithmState) => void;
+type StateChangeListener = (
+    newState: AlgorithmState,
+    oldState: AlgorithmState
+) => void;
 
 /**
  * Works as the model in MVC design pattern,
@@ -18,8 +21,7 @@ export class StateManager {
 
         const oldState = this.state;
         this.state = newState;
-        for (let listener of this.listeners)
-            listener(newState, oldState);
+        for (const listener of this.listeners) listener(newState, oldState);
     }
 
     next() {

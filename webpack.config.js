@@ -7,7 +7,7 @@ module.exports = {
     externals: {
         jquery: 'jQuery',
         jsxgraph: 'JXG',
-        bootstrap: 'bootstrap'
+        bootstrap: 'bootstrap',
     },
     module: {
         rules: [
@@ -24,5 +24,5 @@ module.exports = {
     output: {
         filename: '[name].js',
         path: path.resolve(__dirname, 'dist'),
-    }
+    },
 };
