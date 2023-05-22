@@ -8,6 +8,7 @@ module.exports = {
         jquery: 'jQuery',
         jsxgraph: 'JXG',
         bootstrap: 'bootstrap',
+        'js-sdsl': 'sdsl'
     },
     module: {
         rules: [

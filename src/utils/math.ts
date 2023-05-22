@@ -5,8 +5,6 @@ export type ArrayCoords = [number, number];
 // a small number to fix inaccuracy of floating point arithmetic
 export const EPSILON = 1e-12;
 
-export type EventListener<Event> = (e: Readonly<Event>) => void;
-
 /**
  * a random floating point number in a range
  */
@@ -39,24 +37,4 @@ export function horizontalRelation(line: Line, x: number) {
     if (x > x2) return -1;
     else if (x < x1) return 1;
     else return 0;
-}
-
-export class Palette {
-    private static readonly PALETTE: string[] = [
-        '#bc0101',
-        '#ffd700',
-        '#ea5f94',
-        '#ff7300',
-        '#11b716',
-        '#10d5a8',
-        '#0000ff',
-        '#9d02d7',
-    ];
-    private paletteIdx = 0;
-
-    get() {
-        const ret = Palette.PALETTE[this.paletteIdx % Palette.PALETTE.length];
-        this.paletteIdx++;
-        return ret;
-    }
 }

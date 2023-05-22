@@ -1,6 +1,7 @@
 import { Board, JSXGraph, Line, Point, Segment } from 'jsxgraph';
 
-import { ArrayCoords, EventListener, hrange, random } from './utils';
+import { ArrayCoords, hrange, random } from '../utils/math';
+import { AbstractEventGenerator } from '../utils/patterns';
 
 const PLOT_XMIN = -10,
     PLOT_XMAX = 10,
@@ -12,14 +13,19 @@ const SEGMENT_COLOR = '#0072b2',
     SEGMENT_COLOR_FIXED = '#1f1f1f',
     SEGMENT_ENDPOINT_COLOR_FIXED = '#1f1f1f';
 
-type SegmentListener = (
-    p1: Readonly<Point>,
-    p2: Readonly<Point>,
-    l: Readonly<Line>
-) => void;
-type QueryLineChange = number;
+type NewSegmentEvent = {
+    p1: Readonly<Point>;
+    p2: Readonly<Point>;
+    l: Readonly<Line>;
+};
+type QueryLineChangeEvent = number;
 
-export class PlotBoard {
+type Events = {
+    newSegment: NewSegmentEvent;
+    queryLineChange: QueryLineChangeEvent;
+};
+
+export class PlotBoard extends AbstractEventGenerator<Events> {
     board: Board;
     private acceptChanges = true; // prevents adding/changing segments
     private segments: Segment[] = [];
@@ -27,21 +33,10 @@ export class PlotBoard {
     private sortingEnd: 'left' | 'right' = 'left';
 
     private medians: {
-        [key: number | string | symbol]: {
-            line: Line;
-            relatedSegments: Segment[];
-            color: string;
-        };
+        [key: number | string | symbol]: { line: Line; relatedSegments: Segment[]; color: string };
     } = {};
     // medians visible on each segment (id)
-    private segmentVisibleMedians: {
-        [key: string]: (number | string | symbol)[];
-    } = {};
-
-    private newSegmentListeners: SegmentListener[] = [];
-    private queryLineChangeListeners: EventListener<
-        QueryLineChange | undefined
-    >[] = [];
+    private segmentVisibleMedians: { [key: string]: (number | string | symbol)[] } = {};
 
     private creatingLine?: { p1: Point; p2: Point; l: Line }; // line currently creating
     private queryLine: Line;
@@ -56,10 +51,7 @@ export class PlotBoard {
     private moveEndpointWhenAddingFunction = (event: PointerEvent) => {
         if (this.creatingLine !== undefined) {
             const coords = this.board.getUsrCoordsOfMouse(event);
-            this.creatingLine.p1.setPosition(JXG.COORDS_BY_USER, [
-                this.creatingLine.p1.coords.usrCoords[1],
-                coords[1],
-            ]);
+            this.creatingLine.p1.setPosition(JXG.COORDS_BY_USER, [this.creatingLine.p1.coords.usrCoords[1], coords[1]]);
             this.creatingLine.p2.setPosition(JXG.COORDS_BY_USER, coords);
             this.board.update();
         }
@@ -69,6 +61,8 @@ export class PlotBoard {
     };
 
     constructor(name: string) {
+        super();
+
         this.board = JSXGraph.initBoard(name, {
             boundingbox: [PLOT_XMIN, PLOT_YMAX, PLOT_XMAX, PLOT_YMIN],
             showCopyright: false,
@@ -98,16 +92,11 @@ export class PlotBoard {
                 strokeWidth: 3,
             }
         );
-        this.queryLine.on('up', () =>
-            this.notifyQueryLineChange(
-                this.queryLine.point1.coords.usrCoords[1]
-            )
-        );
+        this.queryLine.on('up', () => this.notify('queryLineChange', this.queryLine.point1.coords.usrCoords[1]));
     }
 
     private newSegment(coords1: ArrayCoords, coords2: ArrayCoords) {
-        if (!this.acceptChanges)
-            throw new Error('Board is frozen, new segments are not accepted.');
+        if (!this.acceptChanges) throw new Error('Board is frozen, new segments are not accepted.');
 
         const p1 = this.board.create('point', coords1, {
                 withLabel: false,
@@ -121,21 +110,11 @@ export class PlotBoard {
                 strokeColor: SEGMENT_COLOR,
             });
         // make segments still horizontal when adjusting
-        p1.on('drag', () =>
-            p2.setPosition(JXG.COORDS_BY_USER, [
-                p2.coords.usrCoords[1],
-                p1.coords.usrCoords[2],
-            ])
-        );
-        p2.on('drag', () =>
-            p1.setPosition(JXG.COORDS_BY_USER, [
-                p1.coords.usrCoords[1],
-                p2.coords.usrCoords[2],
-            ])
-        );
+        p1.on('drag', () => p2.setPosition(JXG.COORDS_BY_USER, [p2.coords.usrCoords[1], p1.coords.usrCoords[2]]));
+        p2.on('drag', () => p1.setPosition(JXG.COORDS_BY_USER, [p1.coords.usrCoords[1], p2.coords.usrCoords[2]]));
         this.segments.push(l);
         this.segmentVisibleMedians[l.id] = [];
-        this.notifyNewSegment(p1, p2, l);
+        this.notify('newSegment', { p1, p2, l });
         return { p1: p1, p2: p2, l: l };
     }
 
@@ -152,20 +131,11 @@ export class PlotBoard {
             segOrder = [];
         for (let i = 0; i < this.segments.length; i++) segIndices.push(i);
         if (this.sortingEnd === 'left') {
-            segIndices.sort(
-                (i, j) =>
-                    hrange(this.segments[i]).left -
-                    hrange(this.segments[j]).left
-            );
+            segIndices.sort((i, j) => hrange(this.segments[i]).left - hrange(this.segments[j]).left);
         } else {
-            segIndices.sort(
-                (i, j) =>
-                    hrange(this.segments[j]).right -
-                    hrange(this.segments[i]).right
-            );
+            segIndices.sort((i, j) => hrange(this.segments[j]).right - hrange(this.segments[i]).right);
         }
-        for (let i = 0; i < this.segments.length; i++)
-            segOrder[segIndices[i]] = i;
+        for (let i = 0; i < this.segments.length; i++) segOrder[segIndices[i]] = i;
 
         const yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
             ystep = yrange / (this.segments.length - 1),
@@ -206,14 +176,6 @@ export class PlotBoard {
         this.sortSegments();
     }
 
-    onNewSegment(listener: SegmentListener) {
-        this.newSegmentListeners.push(listener);
-    }
-
-    notifyNewSegment(p1: Point, p2: Point, l: Line) {
-        for (const listener of this.newSegmentListeners) listener(p1, p2, l);
-    }
-
     getSegments() {
         return this.segments;
     }
@@ -250,13 +212,7 @@ export class PlotBoard {
         }
     }
 
-    addMedian(
-        val: number,
-        segments: Segment[],
-        color: string,
-        visible = false,
-        key: number | string | symbol = val
-    ) {
+    addMedian(val: number, segments: Segment[], color: string, visible = false, key: number | string | symbol = val) {
         if (this.medians[key] !== undefined) return false;
         this.medians[key] = {
             line: this.board.create(
@@ -289,31 +245,18 @@ export class PlotBoard {
 
     setMedianVisible(key: number | string | symbol, visible: boolean) {
         const median = this.medians[key];
-        if (
-            median === undefined ||
-            this.medians[key].line.getAttribute('visible') === visible
-        )
-            return;
+        if (median === undefined || this.medians[key].line.getAttribute('visible') === visible) return;
 
         this.board.suspendUpdate();
         median.line.setAttribute({ visible: visible });
         for (const seg of median.relatedSegments) {
             if (visible) this.segmentVisibleMedians[seg.id].push(key);
-            else
-                this.segmentVisibleMedians[seg.id] = this.segmentVisibleMedians[
-                    seg.id
-                ].filter((val) => val !== key);
+            else this.segmentVisibleMedians[seg.id] = this.segmentVisibleMedians[seg.id].filter((val) => val !== key);
 
             const newlist = this.segmentVisibleMedians[seg.id];
-            let segColor = this.acceptChanges
-                    ? SEGMENT_COLOR
-                    : SEGMENT_COLOR_FIXED,
-                endColor = this.acceptChanges
-                    ? SEGMENT_ENDPOINT_COLOR
-                    : SEGMENT_ENDPOINT_COLOR_FIXED;
-            if (newlist.length > 0)
-                segColor = endColor =
-                    this.medians[newlist[newlist.length - 1]].color;
+            let segColor = this.acceptChanges ? SEGMENT_COLOR : SEGMENT_COLOR_FIXED,
+                endColor = this.acceptChanges ? SEGMENT_ENDPOINT_COLOR : SEGMENT_ENDPOINT_COLOR_FIXED;
+            if (newlist.length > 0) segColor = endColor = this.medians[newlist[newlist.length - 1]].color;
 
             seg.setAttribute({ strokeColor: segColor });
             seg.point1.setAttribute({ color: endColor });
@@ -331,14 +274,6 @@ export class PlotBoard {
 
     showQueryLine() {
         this.queryLine.setAttribute({ visible: true });
-        this.notifyQueryLineChange(this.queryLine.point1.coords.usrCoords[1]);
-    }
-
-    onQueryLineChange(l: EventListener<QueryLineChange>) {
-        this.queryLineChangeListeners.push(l);
-    }
-
-    notifyQueryLineChange(event: QueryLineChange) {
-        for (const l of this.queryLineChangeListeners) l(event);
+        this.notify('queryLineChange', this.queryLine.point1.coords.usrCoords[1]);
     }
 }

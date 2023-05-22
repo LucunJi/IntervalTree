@@ -1,5 +1,6 @@
 import { Segment } from 'jsxgraph';
-import { endpoints, horizontalRelation } from './utils';
+import { endpoints, horizontalRelation } from '../utils/math';
+import { Queue } from 'js-sdsl';
 
 export type TreeNode = {
     parent?: TreeNode;
@@ -22,21 +23,12 @@ export class IntervalTree {
         const segmentsLeftSorted = segments.slice(),
             segmentsRightSorted = segments.slice();
         segmentsLeftSorted.sort(
-            (l1, l2) =>
-                endpoints(l1).left.coords.usrCoords[1] -
-                endpoints(l2).left.coords.usrCoords[1]
+            (l1, l2) => endpoints(l1).left.coords.usrCoords[1] - endpoints(l2).left.coords.usrCoords[1]
         );
         segmentsRightSorted.sort(
-            (l1, l2) =>
-                endpoints(l2).right.coords.usrCoords[1] -
-                endpoints(l1).right.coords.usrCoords[1]
+            (l1, l2) => endpoints(l2).right.coords.usrCoords[1] - endpoints(l1).right.coords.usrCoords[1]
         );
-        this.root = this.makeNode(
-            undefined,
-            segmentsLeftSorted,
-            segmentsRightSorted,
-            0
-        ) as TreeNode;
+        this.root = this.makeNode(undefined, segmentsLeftSorted, segmentsRightSorted, 0) as TreeNode;
         this.height = this.root.height;
     }
 
@@ -67,16 +59,8 @@ export class IntervalTree {
             ir = n - 1,
             cnt = 0;
         while (cnt < n) {
-            const xl =
-                    il >= n
-                        ? undefined
-                        : endpoints(linesLeftSorted[il]).left.coords
-                              .usrCoords[1],
-                xr =
-                    ir < 0
-                        ? undefined
-                        : endpoints(linesRightSorted[ir]).right.coords
-                              .usrCoords[1];
+            const xl = il >= n ? undefined : endpoints(linesLeftSorted[il]).left.coords.usrCoords[1],
+                xr = ir < 0 ? undefined : endpoints(linesRightSorted[ir]).right.coords.usrCoords[1];
             if (xr === undefined || (xl as number) < xr) {
                 v.median = xl as number;
                 il++;
@@ -106,11 +90,21 @@ export class IntervalTree {
         v.childRight = this.makeNode(v, rl, rr, peerIdx * 2 + 1);
 
         if (v.childLeft !== undefined) v.height = v.childLeft.height + 1;
-        if (v.childRight !== undefined)
-            v.height = Math.max(v.height, v.childRight.height + 1);
+        if (v.childRight !== undefined) v.height = Math.max(v.height, v.childRight.height + 1);
 
         this.nodes[(1 << v.depth) - 1 + v.peerIdx] = v;
 
         return v;
+    }
+
+    bfs(callbackFn: (treeNode: TreeNode) => void) {
+        const queue = new Queue<TreeNode>();
+        queue.push(this.root);
+        while (queue.size() > 0) {
+            const node = queue.pop()!;
+            if (node.childLeft !== undefined) queue.push(node.childLeft);
+            if (node.childRight !== undefined) queue.push(node.childRight);
+            callbackFn(node);
+        }
     }
 }

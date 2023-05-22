@@ -1,7 +1,8 @@
 import { Board, JSXGraph, Line, Point, Segment } from 'jsxgraph';
 
-import { IntervalTree, TreeNode } from './intervaltree';
-import { EventListener, Palette } from './utils';
+import { IntervalTree, TreeNode } from '../model/intervaltree';
+import { AbstractEventGenerator } from '../utils/patterns';
+import { Palette } from '../utils/palette';
 
 const TREE_XMIN = -10,
     TREE_XMAX = 10,
@@ -12,8 +13,12 @@ const NODE_SIZE = 0.5;
 type SimulationMode = 'build' | 'query';
 type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
 type RecursionUpdateEvent = { currNode: TreeNode; prevNode?: TreeNode };
+type Events = {
+    hoverNode: HoverNodeEvent;
+    recursionUpdate: RecursionUpdateEvent;
+};
 
-export class TreeBoard {
+export class TreeBoard extends AbstractEventGenerator<Events> {
     board: Board;
     tree: IntervalTree;
     nodes: (Point | undefined)[] = []; // sparse list
@@ -27,11 +32,9 @@ export class TreeBoard {
 
     private hoveringNode?: TreeNode;
 
-    private hoverNodeEventListeners: EventListener<HoverNodeEvent>[] = [];
-    private recursionUpdateListeners: EventListener<RecursionUpdateEvent>[] =
-        [];
-
     constructor(name: string, segments: Segment[]) {
+        super();
+
         this.board = JSXGraph.initBoard(name, {
             boundingbox: [TREE_XMIN, TREE_YMAX, TREE_XMAX, TREE_YMIN],
             showCopyright: false,
@@ -56,27 +59,21 @@ export class TreeBoard {
                 }
             }
             if (this.hoveringNode !== prevHovering) {
-                this.notifyHoverNodeEvent({
-                    node: this.hoveringNode,
-                    prevNode: prevHovering,
-                });
+                this.notify('hoverNode', { node: this.hoveringNode, prevNode: prevHovering });
             }
         });
     }
 
     private drawTree() {
         if (this.tree.height === 1) {
-            const coords = [
-                (TREE_XMAX + TREE_XMIN) / 2,
-                (TREE_YMAX + TREE_YMIN) / 2,
-            ];
+            const coords = [(TREE_XMAX + TREE_XMIN) / 2, (TREE_YMAX + TREE_YMIN) / 2];
             this.nodes[0] = this.board.create('point', coords, {
                 size: NODE_SIZE,
                 sizeUnit: 'user',
                 withLabel: false,
                 strokeWidth: 4,
                 color: new Palette().get(),
-            });
+            }) as Point;
             return;
         }
 
@@ -89,10 +86,7 @@ export class TreeBoard {
         const nodesIdxSorted = this.tree.nodes
             .map((n, i) => (n === undefined ? undefined : i))
             .filter((i) => i !== undefined)
-            .sort(
-                (i, j) =>
-                    this.tree.nodes[i!]!.median - this.tree.nodes[j!]!.median
-            ) as number[];
+            .sort((i, j) => this.tree.nodes[i!]!.median - this.tree.nodes[j!]!.median) as number[];
         const nodeColors: (string | undefined)[] = [],
             palette = new Palette();
         for (const i of nodesIdxSorted) nodeColors[i] = palette.get();
@@ -116,11 +110,10 @@ export class TreeBoard {
                     });
                     // connect to parent node
                     if (idx > 0)
-                        this.edges[idx] = this.board.create(
-                            'line',
-                            [this.nodes[idx], this.nodes[(idx - 1) >>> 1]],
-                            { straightFirst: false, straightLast: false }
-                        );
+                        this.edges[idx] = this.board.create('line', [this.nodes[idx], this.nodes[(idx - 1) >>> 1]], {
+                            straightFirst: false,
+                            straightLast: false,
+                        });
                 }
             }
         }
@@ -137,16 +130,16 @@ export class TreeBoard {
         } else if (this.simulationMode === 'query') {
             this.setSubtreeVisible(this.tree.root, true);
         }
-        this.notifyRecursionUpdate({
-            currNode: this.currNode,
-            prevNode: this.prevNode,
-        });
+        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 
-    private setNodeAncestorsVisible(
-        node: TreeNode | undefined,
-        visible: boolean
-    ) {
+    setNodeVisible(node: TreeNode, visible: boolean) {
+        const idx = (1 << node.depth) - 1 + node.peerIdx;
+        this.nodes[idx]?.setAttribute({ visible: visible });
+        this.edges[idx]?.setAttribute({ visible: visible });
+    }
+
+    setNodeAncestorsVisible(node: TreeNode | undefined, visible: boolean) {
         while (node !== undefined) {
             const idx = (1 << node.depth) - 1 + node.peerIdx;
             this.nodes[idx]?.setAttribute({ visible: visible });
@@ -155,12 +148,12 @@ export class TreeBoard {
         }
     }
 
-    private setChildrenVisible(node: TreeNode | undefined, visible: boolean) {
+    setChildrenVisible(node: TreeNode | undefined, visible: boolean) {
         this.setSubtreeVisible(node?.childLeft, visible);
         this.setSubtreeVisible(node?.childRight, visible);
     }
 
-    private setSubtreeVisible(node: TreeNode | undefined, visible: boolean) {
+    setSubtreeVisible(node: TreeNode | undefined, visible: boolean) {
         if (node === undefined) return;
 
         const idx = (1 << node.depth) - 1 + node.peerIdx;
@@ -176,7 +169,7 @@ export class TreeBoard {
         this.graphNode(node)?.setAttribute({ fillOpacity: hollow ? 0 : 1 });
     }
 
-    private focusNode(node: TreeNode | undefined) {
+    focusNode(node: TreeNode | undefined) {
         this.setNodeHollow(this.focusedNode, false);
         this.setNodeHollow((this.focusedNode = node), true);
     }
@@ -199,22 +192,7 @@ export class TreeBoard {
         if (!this.canRecurse()) return;
 
         if (this.simulationMode === 'build') {
-            const temp = this.currNode;
-            if (
-                this.prevNode === undefined ||
-                this.prevNode === this.currNode.parent
-            ) {
-                this.currNode =
-                    this.currNode.childLeft !== undefined
-                        ? this.currNode.childLeft
-                        : this.currNode.childRight!;
-            } else {
-                this.currNode = this.currNode.childRight!;
-            }
-            this.prevNode = temp;
-
-            this.focusNode(this.currNode);
-            this.setNodeAncestorsVisible(this.currNode, true);
+            //
         } else {
             this.prevNode = this.currNode;
             if (this.queryLocation! < this.currNode.median) {
@@ -225,36 +203,14 @@ export class TreeBoard {
             this.focusNode(this.currNode);
         }
 
-        this.notifyRecursionUpdate({
-            currNode: this.currNode,
-            prevNode: this.prevNode,
-        });
+        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 
     canRecurse(): boolean {
         if (this.simulationMode === 'build') {
-            if (
-                this.prevNode === undefined ||
-                this.prevNode === this.currNode.parent
-            ) {
-                // go down normally
-                return (
-                    this.currNode.childLeft !== undefined ||
-                    this.currNode.childRight !== undefined
-                );
-            } else if (this.prevNode === this.currNode.childLeft) {
-                // just finished the left subtree
-                return this.currNode.childRight !== undefined;
-            } else {
-                // then it must be on the right child and finishing the subtree
-                return false;
-            }
+            return false;
         } else {
-            if (
-                this.queryLocation === undefined ||
-                this.queryLocation === this.currNode.median
-            )
-                return false;
+            if (this.queryLocation === undefined || this.queryLocation === this.currNode.median) return false;
             if (this.queryLocation < this.currNode.median) {
                 return this.currNode.childLeft !== undefined;
             } else {
@@ -267,32 +223,19 @@ export class TreeBoard {
         if (!this.canUndoRecurse()) return;
 
         if (this.simulationMode === 'build') {
-            this.setSubtreeVisible(this.currNode, false);
-            if (
-                this.currNode === this.currNode.parent!.childRight &&
-                this.currNode.parent!.childRight !== undefined
-            ) {
-                this.prevNode = this.currNode.parent!.childLeft;
-            } else {
-                this.prevNode = this.currNode.parent!.parent;
-            }
-            this.currNode = this.currNode.parent!;
-            this.focusNode(this.currNode);
+            //
         } else {
             this.currNode = this.prevNode!;
             this.prevNode = this.currNode.parent;
             this.focusNode(this.currNode);
         }
 
-        this.notifyRecursionUpdate({
-            currNode: this.currNode,
-            prevNode: this.prevNode,
-        });
+        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 
     canUndoRecurse(): boolean {
         if (this.simulationMode === 'build') {
-            return this.currNode.parent !== undefined;
+            return false;
         } else {
             if (this.queryLocation === undefined) return false;
             return this.currNode.parent !== undefined;
@@ -306,35 +249,12 @@ export class TreeBoard {
     finishSubtree() {
         if (!this.canFinishSubtree()) return;
 
-        if (this.simulationMode === 'build') {
-            this.setSubtreeVisible(this.currNode, true);
-            if (this.currNode === this.tree.root) {
-                this.prevNode =
-                    this.currNode.childRight !== undefined
-                        ? this.currNode.childRight
-                        : this.currNode.childLeft;
-                this.focusNode(undefined);
-            } else {
-                this.prevNode = this.currNode;
-                this.currNode = this.currNode.parent!;
-                this.focusNode(this.currNode);
-            }
-        }
-
-        this.notifyRecursionUpdate({
-            currNode: this.currNode,
-            prevNode: this.prevNode,
-        });
+        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 
     canFinishSubtree(): boolean {
         if (this.simulationMode === 'build') {
-            const finishRoot =
-                this.currNode.parent === undefined &&
-                ((this.prevNode === this.currNode.childLeft &&
-                    this.currNode.childRight === undefined) ||
-                    this.prevNode === this.currNode.childRight);
-            return !finishRoot;
+            return false;
         } else {
             return false;
         }
@@ -344,31 +264,12 @@ export class TreeBoard {
         return this.simulationMode;
     }
 
-    onHoverNode(l: EventListener<HoverNodeEvent>) {
-        this.hoverNodeEventListeners.push(l);
-    }
-
-    private notifyHoverNodeEvent(event: HoverNodeEvent) {
-        for (const l of this.hoverNodeEventListeners) l(event);
-    }
-
-    onRecursionUpdate(l: EventListener<RecursionUpdateEvent>) {
-        this.recursionUpdateListeners.push(l);
-    }
-
-    private notifyRecursionUpdate(event: RecursionUpdateEvent) {
-        for (const l of this.recursionUpdateListeners) l(event);
-    }
-
     simulateQuery(x: number) {
         if (this.getMode() !== 'query') return;
         this.currNode = this.tree.root;
         this.prevNode = undefined;
         this.queryLocation = x;
         this.focusNode(this.tree.root);
-        this.notifyRecursionUpdate({
-            currNode: this.currNode,
-            prevNode: this.prevNode,
-        });
+        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 }
