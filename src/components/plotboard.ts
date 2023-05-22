@@ -274,6 +274,9 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
 
     showQueryLine() {
         this.queryLine.setAttribute({ visible: true });
-        this.notify('queryLineChange', this.queryLine.point1.coords.usrCoords[1]);
+    }
+
+    getQuery() {
+        return this.queryLine.point1.coords.usrCoords[1];
     }
 }

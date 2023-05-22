@@ -12,10 +12,8 @@ const NODE_SIZE = 0.5;
 
 type SimulationMode = 'build' | 'query';
 type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
-type RecursionUpdateEvent = { currNode: TreeNode; prevNode?: TreeNode };
 type Events = {
     hoverNode: HoverNodeEvent;
-    recursionUpdate: RecursionUpdateEvent;
 };
 
 export class TreeBoard extends AbstractEventGenerator<Events> {
@@ -130,7 +128,6 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
         } else if (this.simulationMode === 'query') {
             this.setSubtreeVisible(this.tree.root, true);
         }
-        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 
     setNodeVisible(node: TreeNode, visible: boolean) {
@@ -184,92 +181,7 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
         this.initSimulation();
     }
 
-    /**
-     * Possible when the previous is the current's parent,
-     * then goes to the left child, or the right child when impossible
-     */
-    recurse() {
-        if (!this.canRecurse()) return;
-
-        if (this.simulationMode === 'build') {
-            //
-        } else {
-            this.prevNode = this.currNode;
-            if (this.queryLocation! < this.currNode.median) {
-                this.currNode = this.currNode.childLeft!;
-            } else {
-                this.currNode = this.currNode.childRight!;
-            }
-            this.focusNode(this.currNode);
-        }
-
-        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
-    }
-
-    canRecurse(): boolean {
-        if (this.simulationMode === 'build') {
-            return false;
-        } else {
-            if (this.queryLocation === undefined || this.queryLocation === this.currNode.median) return false;
-            if (this.queryLocation < this.currNode.median) {
-                return this.currNode.childLeft !== undefined;
-            } else {
-                return this.currNode.childRight !== undefined;
-            }
-        }
-    }
-
-    undoRecurse() {
-        if (!this.canUndoRecurse()) return;
-
-        if (this.simulationMode === 'build') {
-            //
-        } else {
-            this.currNode = this.prevNode!;
-            this.prevNode = this.currNode.parent;
-            this.focusNode(this.currNode);
-        }
-
-        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
-    }
-
-    canUndoRecurse(): boolean {
-        if (this.simulationMode === 'build') {
-            return false;
-        } else {
-            if (this.queryLocation === undefined) return false;
-            return this.currNode.parent !== undefined;
-        }
-    }
-
-    /**
-     * Finish the current subtree and return to the parent,
-     * not available for query mode (as there is no branching)
-     */
-    finishSubtree() {
-        if (!this.canFinishSubtree()) return;
-
-        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
-    }
-
-    canFinishSubtree(): boolean {
-        if (this.simulationMode === 'build') {
-            return false;
-        } else {
-            return false;
-        }
-    }
-
     getMode() {
         return this.simulationMode;
-    }
-
-    simulateQuery(x: number) {
-        if (this.getMode() !== 'query') return;
-        this.currNode = this.tree.root;
-        this.prevNode = undefined;
-        this.queryLocation = x;
-        this.focusNode(this.tree.root);
-        this.notify('recursionUpdate', { currNode: this.currNode, prevNode: this.prevNode });
     }
 }

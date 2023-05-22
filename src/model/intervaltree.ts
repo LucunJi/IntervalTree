@@ -20,6 +20,7 @@ export class IntervalTree {
     readonly height: number;
 
     constructor(segments: Segment[]) {
+        if (segments.length === 0) throw new Error('Input array is empty');
         const segmentsLeftSorted = segments.slice(),
             segmentsRightSorted = segments.slice();
         segmentsLeftSorted.sort(

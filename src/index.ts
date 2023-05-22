@@ -5,7 +5,6 @@ import { IntervalTreeSimulator } from './model/simulator';
 import { TreeBoard } from './components/treeboard';
 import { TreeNode } from './model/intervaltree';
 import { Segment } from 'jsxgraph';
-import { hrange } from './utils/math';
 import { Palette } from './utils/palette';
 
 $(() => {
@@ -39,14 +38,40 @@ $(() => {
     }
 
     simulator.on('stateChange', (e) => {
-        updateAlgoBtn();
-        if (e.state === 'build') {
-            plotboard.finalizeChanges();
-            const palette = new Palette();
-            // FIXME: correct color
-            simulator.tree!.bfs((node) => plotboard.addMedian(node.median, node.segmentsLeftSorted, palette.get()));
-            plotboard.setMedianVisible(simulator.tree!.root.median, true);
+        if (e.state !== 'add') {
             populateForm.find(':input').prop('disabled', true);
+            $('[name=sort-endpoint]').prop('disabled', false);
+            treeboard?.setSimulationMode(e.state);
+        }
+        if (e.state === 'build') plotboard.finalizeChanges();
+        if (e.state === 'query') {
+            simulator.tree?.nodes.forEach((n) => {
+                if (n !== undefined) plotboard.setMedianVisible(n.median, false);
+            });
+            plotboard.showQueryLine();
+        }
+    });
+
+    simulator.on('algorithmReset', (e) => {
+        updateAlgoBtn();
+        switch (e.simState) {
+            case 'build':
+                {
+                    const palette = new Palette();
+                    e.tree.bfs((n) => {
+                        const color = treeboard?.graphNode(n)!.getAttribute('strokeColor') ?? palette.get();
+                        plotboard.addMedian(n.median, n.segmentsLeftSorted, color);
+                    });
+
+                    plotboard.setMedianVisible(e.algoState.treeNode.median, true);
+                }
+                break;
+            case 'query':
+                {
+                    const palette = new Palette();
+                    setOrDelDelQueryMedian(e.algoState.treeNode, e.algoState.involvedSegs, true);
+                }
+                break;
         }
     });
 
@@ -55,32 +80,59 @@ $(() => {
         treeboard?.setNodeVisible(node, visible);
     }
 
-    simulator.on('algorithmStateChange', (event) => {
+    function setOrDelDelQueryMedian(node: TreeNode, segs: Segment[], setOrDel: boolean) {
+        const color = treeboard!.graphNode(node)!.getAttribute('strokeColor');
+        if (setOrDel) plotboard.addMedian(node.median, segs, color, true, node.median + 'query');
+        else plotboard.removeMedian(node.median + 'query');
+    }
+
+    simulator.on('algorithmStateChange', (e) => {
         updateAlgoBtn();
-        if (simulator.getState() === 'build') {
-            treeboard?.board.suspendUpdate();
+        switch (simulator.getState()) {
+            case 'build':
+                treeboard?.board.suspendUpdate();
 
-            treeboard?.focusNode(event.currState.treeNode);
-            event.addedTreeNodes.forEach((node) => setTreeNodeDisplay(node, true));
-            event.removedTreeNodes.forEach((node) => setTreeNodeDisplay(node, false));
+                treeboard?.focusNode(e.currState.treeNode);
+                e.addedTreeNodesSegs.forEach((s, n) => setTreeNodeDisplay(n, true));
+                e.removedTreeNodesSegs.forEach((s, n) => setTreeNodeDisplay(n, false));
 
-            treeboard?.board.unsuspendUpdate();
+                treeboard?.board.unsuspendUpdate();
+                break;
+            case 'query':
+                e.addedTreeNodesSegs.forEach((s, n) => setOrDelDelQueryMedian(n, s, true));
+                e.removedTreeNodesSegs.forEach((s, n) => setOrDelDelQueryMedian(n, s, false));
+                treeboard?.focusNode(e.currState.treeNode);
+                break;
         }
     });
 
     plotboard.on('newSegment', () => algoBtn.start.prop('disabled', false));
+
+    plotboard.on('queryLineChange', (x) => {
+        simulator.tree?.nodes.forEach((node) => {
+            if (node !== undefined) plotboard.removeMedian(node.median + 'query');
+        });
+        simulator.query(x);
+    });
 
     // disable all algorithmic buttons initially
     algoBtn.all.prop('disabled', true);
 
     // action of #algo-start
     algoBtn.start.on('click', () => {
-        if (simulator.getState() === 'add' && plotboard.getSegments().length === 0) return;
-        $('[name=sort-endpoint]').prop('disabled', false);
-        if (simulator.getState() === 'add') simulator.build(plotboard.getSegments());
-        else if (simulator.getState() !== 'query') simulator.next();
-        else window.location.reload();
+        switch (simulator.getState()) {
+            case 'add':
+                if (plotboard.getSegments().length > 0) simulator.build(plotboard.getSegments());
+                break;
+            case 'build':
+                simulator.query(plotboard.getQuery());
+                break;
+            case 'query':
+                window.location.reload();
+                break;
+        }
     });
+
     // toggle state of #algo-start
     simulator.on('stateChange', (e) => {
         switch (e.state) {
@@ -111,62 +163,10 @@ $(() => {
         })
         .prop('disabled', true);
 
-    function updateRecursionStatus(board: TreeBoard, currNode: TreeNode) {
-        if (simulator.getState() === 'query') {
-            algoBtn.recurse.prop('disabled', !board.canRecurse());
-            algoBtn.undoRecurse.prop('disabled', !board.canUndoRecurse());
-            algoBtn.finishSubtree.prop('disabled', !board.canFinishSubtree());
-        }
-
-        if (board.getMode() === 'build') {
-            //
-        } else {
-            // show the median for the current node and its ancestors
-            for (let node: TreeNode | undefined = currNode; node !== undefined; node = node.parent) {
-                let intersections: Segment[] = [];
-                const x = board.queryLocation!;
-                if (x < currNode.median) {
-                    intersections = node.segmentsLeftSorted.filter((s) => hrange(s).left <= x);
-                } else if (x > currNode.median) {
-                    intersections = node.segmentsLeftSorted.filter((s) => hrange(s).right >= x);
-                } else {
-                    intersections = node.segmentsLeftSorted.slice();
-                }
-                plotboard.addMedian(
-                    node.median,
-                    intersections,
-                    board.graphNode(node)!.getAttribute('strokeColor'),
-                    true,
-                    node.median + 'query'
-                );
-            }
-
-            // remove medians for the siblings in case of undoing recursion
-            for (let i = (1 << currNode.depth) - 1 + currNode.peerIdx + 1; i < board.tree.nodes.length; i++) {
-                const node = board.tree.nodes[i];
-                if (node !== undefined) plotboard.removeMedian(node.median + 'query');
-            }
-        }
-    }
-
     simulator.on('stateChange', (e) => {
         if (e.state === 'build' && treeboard === undefined) {
             // setup treeboard
             treeboard = new TreeBoard('treeboard', plotboard.getSegments());
-
-            // plotboard.onQueryLineChange((n) => {
-            plotboard.on('queryLineChange', (n) => {
-                for (const node of treeboard!.tree.nodes) {
-                    if (node === undefined) continue;
-                    plotboard.removeMedian(node.median + 'query');
-                }
-                treeboard?.simulateQuery(n);
-            });
-
-            simulator.on('stateChange', (e) => {
-                if (e.state !== 'add') treeboard?.setSimulationMode(e.state);
-                if (e.state === 'query') plotboard.showQueryLine();
-            });
 
             treeboard.on('hoverNode', (event) => {
                 if (event.prevNode !== undefined) plotboard.removeMedian('hover');
@@ -180,25 +180,6 @@ $(() => {
                     );
                 }
             });
-
-            treeboard.on('recursionUpdate', (event) => updateRecursionStatus(treeboard!, event.currNode));
-
-            algoBtn.recurse.on('click', () => {
-                if (simulator.getState() === 'query') treeboard!.recurse();
-            });
-            algoBtn.undoRecurse.on('click', () => {
-                if (simulator.getState() === 'query') treeboard!.undoRecurse();
-            });
-            algoBtn.finishSubtree.on('click', () => {
-                if (simulator.getState() === 'query') treeboard!.finishSubtree();
-            });
-
-            updateRecursionStatus(treeboard, treeboard.tree.root);
-        } else if (e.state === 'query' && treeboard !== undefined) {
-            for (const n of treeboard.tree.nodes) {
-                if (n === undefined) continue;
-                plotboard.setMedianVisible(n.median, false);
-            }
         }
     });
 });
