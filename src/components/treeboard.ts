@@ -1,4 +1,4 @@
-import { Board, JSXGraph, Line, Point, Segment } from 'jsxgraph';
+import { Board, JSXGraph, Line, Point } from 'jsxgraph';
 
 import { IntervalTree, TreeNode } from '../model/intervaltree';
 import { AbstractEventGenerator } from '../utils/patterns';
@@ -10,7 +10,6 @@ const TREE_XMIN = -10,
     TREE_YMAX = 10;
 const NODE_SIZE = 0.5;
 
-type SimulationMode = 'build' | 'query';
 type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
 type Events = {
     hoverNode: HoverNodeEvent;
@@ -18,19 +17,15 @@ type Events = {
 
 export class TreeBoard extends AbstractEventGenerator<Events> {
     board: Board;
-    tree: IntervalTree;
+    private tree: IntervalTree;
     nodes: (Point | undefined)[] = []; // sparse list
     edges: (Line | undefined)[] = []; // sparse list, edge[i] connects nodes[i] and its parent
-    queryLocation?: number;
 
-    private simulationMode: SimulationMode = 'build';
-    private currNode: TreeNode;
-    private prevNode?: TreeNode;
     private focusedNode?: TreeNode;
 
     private hoveringNode?: TreeNode;
 
-    constructor(name: string, segments: Segment[]) {
+    constructor(name: string, tree: IntervalTree) {
         super();
 
         this.board = JSXGraph.initBoard(name, {
@@ -40,10 +35,8 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
             pan: { enabled: true, needShift: false, needTwoFingers: false },
             zoom: { wheel: true, needShift: false },
         });
-        this.tree = new IntervalTree(segments);
+        this.tree = tree;
         this.drawTree();
-
-        this.initSimulation();
 
         this.board.on('move', () => {
             const prevHovering = this.hoveringNode;
@@ -117,19 +110,6 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
         }
     }
 
-    private initSimulation() {
-        if (this.simulationMode === 'build') {
-            this.setNodeAncestorsVisible(this.tree.root, true);
-            this.setChildrenVisible(this.tree.root, false);
-
-            this.prevNode = undefined;
-            this.currNode = this.tree.root;
-            this.focusNode(this.currNode);
-        } else if (this.simulationMode === 'query') {
-            this.setSubtreeVisible(this.tree.root, true);
-        }
-    }
-
     setNodeVisible(node: TreeNode, visible: boolean) {
         const idx = (1 << node.depth) - 1 + node.peerIdx;
         this.nodes[idx]?.setAttribute({ visible: visible });
@@ -173,15 +153,5 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
 
     graphNode(node: TreeNode) {
         return this.nodes[(1 << node.depth) - 1 + node.peerIdx];
-    }
-
-    setSimulationMode(mode: SimulationMode) {
-        if (mode === this.simulationMode) return;
-        this.simulationMode = mode;
-        this.initSimulation();
-    }
-
-    getMode() {
-        return this.simulationMode;
     }
 }

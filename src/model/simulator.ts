@@ -134,7 +134,7 @@ class QuerySimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulat
     }
 }
 
-type States = 'add' | 'build' | 'query';
+type States = 'draw' | 'build' | 'query';
 
 type StateChangeEvent<S> = { state: S; prevState: S };
 type AlgorithmResetEvent = { simState: States; algoState: IntervalTreeSimulationNode; tree: IntervalTree };
@@ -154,7 +154,7 @@ type Events = {
  * as a composition of a building simulator and a query simulator
  */
 export class IntervalTreeSimulator extends AbstractEventGenerator<Events> implements Simulator<Actions> {
-    private state: States = 'add';
+    private state: States = 'draw';
     tree?: IntervalTree;
     private simulator?: BuildingSimulator | QuerySimulator;
 

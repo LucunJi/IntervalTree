@@ -2,6 +2,8 @@ import { Board, JSXGraph, Line, Point, Segment } from 'jsxgraph';
 
 import { ArrayCoords, hrange, random } from '../utils/math';
 import { AbstractEventGenerator } from '../utils/patterns';
+import { LinkList } from 'js-sdsl';
+import { batchUpdate } from '../utils/utils';
 
 const PLOT_XMIN = -10,
     PLOT_XMAX = 10,
@@ -32,11 +34,9 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
 
     private sortingEnd: 'left' | 'right' = 'left';
 
-    private medians: {
-        [key: number | string | symbol]: { line: Line; relatedSegments: Segment[]; color: string };
-    } = {};
+    private medians = new Map<number | string | symbol, { line: Line; relatedSegments: Segment[]; color: string }>();
     // medians visible on each segment (id)
-    private segmentVisibleMedians: { [key: string]: (number | string | symbol)[] } = {};
+    private segmentVisibleMedians = new Map<string, LinkList<number | string | symbol>>();
 
     private creatingLine?: { p1: Point; p2: Point; l: Line }; // line currently creating
     private queryLine: Line;
@@ -113,7 +113,7 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         p1.on('drag', () => p2.setPosition(JXG.COORDS_BY_USER, [p2.coords.usrCoords[1], p1.coords.usrCoords[2]]));
         p2.on('drag', () => p1.setPosition(JXG.COORDS_BY_USER, [p1.coords.usrCoords[1], p2.coords.usrCoords[2]]));
         this.segments.push(l);
-        this.segmentVisibleMedians[l.id] = [];
+        this.segmentVisibleMedians.set(l.id, new LinkList());
         this.notify('newSegment', { p1, p2, l });
         return { p1: p1, p2: p2, l: l };
     }
@@ -158,20 +158,20 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         this.board.off('move', this.moveEndpointWhenAddingFunction);
         this.board.off('up', this.releaseAddingSegmentFunction);
 
-        this.board.suspendUpdate();
-        for (let i = 0; i < this.segments.length; i++) {
-            const seg = this.segments[i];
-            seg.setAttribute({ strokeColor: SEGMENT_COLOR_FIXED, fixed: true });
-            seg.point1.setAttribute({
-                color: SEGMENT_ENDPOINT_COLOR_FIXED,
-                fixed: true,
-            });
-            seg.point2.setAttribute({
-                color: SEGMENT_ENDPOINT_COLOR_FIXED,
-                fixed: true,
-            });
-        }
-        this.board.unsuspendUpdate();
+        batchUpdate(this.board, () => {
+            for (let i = 0; i < this.segments.length; i++) {
+                const seg = this.segments[i];
+                seg.setAttribute({ strokeColor: SEGMENT_COLOR_FIXED, fixed: true });
+                seg.point1.setAttribute({
+                    color: SEGMENT_ENDPOINT_COLOR_FIXED,
+                    fixed: true,
+                });
+                seg.point2.setAttribute({
+                    color: SEGMENT_ENDPOINT_COLOR_FIXED,
+                    fixed: true,
+                });
+            }
+        });
 
         this.sortSegments();
     }
@@ -182,27 +182,15 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
 
     populateSegments(n: number) {
         const xrange = (PLOT_XMAX - PLOT_XMIN) * 0.95,
-            xmin = PLOT_XMIN + (PLOT_XMAX - PLOT_XMIN - xrange) / 2,
+            xmin = (PLOT_XMAX + PLOT_XMIN - xrange) / 2,
             xmax = xmin + xrange,
-            minlength = xrange * 0.04;
-
-        if (n === 1) {
-            const y = (PLOT_YMAX + PLOT_YMIN) / 2;
-            let x1: number, x2: number;
-            do {
-                x1 = random(xmin, xmax);
-                x2 = random(xmin, xmax);
-            } while (Math.abs(x1 - x2) < minlength);
-            this.newSegment([x1, y], [x2, y]);
-            return;
-        }
-
-        const yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
-            ystep = yrange / (n - 1),
-            ymin = PLOT_YMIN + (PLOT_YMAX - PLOT_YMIN - yrange) / 2;
+            minlength = xrange * 0.04,
+            yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
+            ystep = yrange / (n + 1),
+            ymin = (PLOT_YMAX + PLOT_YMIN - yrange) / 2;
 
         for (let i = 0; i < n; i++) {
-            const y = ymin + ystep * i;
+            const y = ymin + ystep * (i + 1);
             let x1: number, x2: number;
             do {
                 x1 = random(xmin, xmax);
@@ -213,56 +201,53 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
     }
 
     addMedian(val: number, segments: Segment[], color: string, visible = false, key: number | string | symbol = val) {
-        if (this.medians[key] !== undefined) return false;
-        this.medians[key] = {
-            line: this.board.create(
-                'line',
-                [
-                    [val, 0],
-                    [val, 1],
-                ],
-                {
-                    strokeColor: color,
-                    dash: 2,
-                    visible: false,
-                    fixed: true,
-                }
-            ),
-            relatedSegments: segments,
-            color: color,
-        };
+        if (this.medians.has(key)) return false;
+        const attrs = { strokeColor: color, dash: 2, visible: false, fixed: true };
+        const line: Line = this.board.create(
+            'line',
+            [
+                [val, 0],
+                [val, 1],
+            ],
+            attrs
+        );
+        this.medians.set(key, { line, relatedSegments: segments, color: color });
+
         this.setMedianVisible(key, visible);
         return true;
     }
 
     removeMedian(key: number | string | symbol) {
-        if (this.medians[key] === undefined) return false;
+        const median = this.medians.get(key);
+        if (median === undefined) return false;
         this.setMedianVisible(key, false);
-        this.board.removeObject(this.medians[key].line);
-        delete this.medians[key];
+        this.board.removeObject(median.line);
+        this.medians.delete(key);
+
         return true;
     }
 
     setMedianVisible(key: number | string | symbol, visible: boolean) {
-        const median = this.medians[key];
-        if (median === undefined || this.medians[key].line.getAttribute('visible') === visible) return;
+        const median = this.medians.get(key);
+        if (median === undefined || median.line.getAttribute('visible') === visible) return;
+        console.log('setvisible', key, median.color, visible);
 
-        this.board.suspendUpdate();
         median.line.setAttribute({ visible: visible });
         for (const seg of median.relatedSegments) {
-            if (visible) this.segmentVisibleMedians[seg.id].push(key);
-            else this.segmentVisibleMedians[seg.id] = this.segmentVisibleMedians[seg.id].filter((val) => val !== key);
+            const newlist = this.segmentVisibleMedians.get(seg.id)!;
 
-            const newlist = this.segmentVisibleMedians[seg.id];
+            if (visible) newlist.pushBack(key);
+            else newlist.eraseElementByValue(key);
+
             let segColor = this.acceptChanges ? SEGMENT_COLOR : SEGMENT_COLOR_FIXED,
                 endColor = this.acceptChanges ? SEGMENT_ENDPOINT_COLOR : SEGMENT_ENDPOINT_COLOR_FIXED;
-            if (newlist.length > 0) segColor = endColor = this.medians[newlist[newlist.length - 1]].color;
+            const lastMedian = newlist.back();
+            if (lastMedian !== undefined) segColor = endColor = this.medians.get(lastMedian)!.color;
 
             seg.setAttribute({ strokeColor: segColor });
             seg.point1.setAttribute({ color: endColor });
             seg.point2.setAttribute({ color: endColor });
         }
-        this.board.unsuspendUpdate();
     }
 
     setSortingEnd(end: 'left' | 'right') {
