@@ -56,7 +56,7 @@ class IntervalTreeSimulationNode implements SimulationNode<Actions> {
 /**
  * Suitable for the building process of any binary tree
  */
-class BuildingSimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
+export class BuildingSimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
     constructor(tree: IntervalTree) {
         super(BuildingSimulator.buildGraph(tree.root), 0);
     }
@@ -103,7 +103,7 @@ class BuildingSimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimu
     }
 }
 
-class QuerySimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
+export class QuerySimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
     constructor(tree: IntervalTree, query: number) {
         super(QuerySimulator.buildGraph(tree.root, query), 0);
     }

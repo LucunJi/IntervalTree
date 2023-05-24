@@ -10,7 +10,7 @@ const TREE_XMIN = -10,
     TREE_YMAX = 10;
 const NODE_SIZE = 0.5;
 
-type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
+export type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
 type Events = {
     hoverNode: HoverNodeEvent;
 };

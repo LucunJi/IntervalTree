@@ -4,6 +4,7 @@ import { ArrayCoords, hrange, random } from '../utils/math';
 import { AbstractEventGenerator } from '../utils/patterns';
 import { LinkList } from 'js-sdsl';
 import { batchUpdate } from '../utils/utils';
+import { BUS } from '../index';
 
 const PLOT_XMIN = -10,
     PLOT_XMAX = 10,
@@ -15,12 +16,12 @@ const SEGMENT_COLOR = '#0072b2',
     SEGMENT_COLOR_FIXED = '#1f1f1f',
     SEGMENT_ENDPOINT_COLOR_FIXED = '#1f1f1f';
 
-type NewSegmentEvent = {
+export type NewSegmentEvent = {
     p1: Readonly<Point>;
     p2: Readonly<Point>;
     l: Readonly<Line>;
 };
-type QueryLineChangeEvent = number;
+export type QueryLineChangeEvent = number;
 
 type Events = {
     newSegment: NewSegmentEvent;
@@ -60,7 +61,7 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         this.creatingLine = undefined;
     };
 
-    constructor(name: string) {
+    constructor( name: string ) {
         super();
 
         this.board = JSXGraph.initBoard(name, {
@@ -114,7 +115,8 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         p2.on('drag', () => p1.setPosition(JXG.COORDS_BY_USER, [p1.coords.usrCoords[1], p2.coords.usrCoords[2]]));
         this.segments.push(l);
         this.segmentVisibleMedians.set(l.id, new LinkList());
-        this.notify('newSegment', { p1, p2, l });
+        BUS.emit('newSegment', {p1, p2, l});
+        // this.notify('newSegment', { p1, p2, l });
         return { p1: p1, p2: p2, l: l };
     }
 
@@ -230,7 +232,6 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
     setMedianVisible(key: number | string | symbol, visible: boolean) {
         const median = this.medians.get(key);
         if (median === undefined || median.line.getAttribute('visible') === visible) return;
-        console.log('setvisible', key, median.color, visible);
 
         median.line.setAttribute({ visible: visible });
         for (const seg of median.relatedSegments) {
