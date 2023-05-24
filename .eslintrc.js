@@ -21,6 +21,15 @@ module.exports = {
     rules: {
         'dot-notation': 'off',
         '@typescript-eslint/consistent-type-definitions': 'off',
-        '@typescript-eslint/no-non-null-assertion': 'off'
+        '@typescript-eslint/no-non-null-assertion': 'off',
+        '@typescript-eslint/no-empty-function': 'off',
+        '@typescript-eslint/no-unused-vars': [
+            'warn',
+            {
+                'argsIgnorePattern': '^_',
+                'varsIgnorePattern': '^_',
+                'caughtErrorsIgnorePattern': '^_'
+            }
+        ]
     }
 };

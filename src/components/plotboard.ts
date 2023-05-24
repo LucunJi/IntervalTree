@@ -1,36 +1,43 @@
 import { Board, JSXGraph, Line, Point, Segment } from 'jsxgraph';
 
-import { ArrayCoords, hrange, random } from '../utils/math';
-import { AbstractEventGenerator } from '../utils/patterns';
+import { ArrayCoords, linspace, random, resizeRange } from '../utils/math';
 import { LinkList } from 'js-sdsl';
-import { batchUpdate } from '../utils/utils';
+import { BUS } from '../index';
+import * as $ from 'jquery';
+import { batchUpdate, hrange } from '../utils/jsxgraph';
+import { enumerate, range } from '../utils/utils';
 
 const PLOT_XMIN = -10,
     PLOT_XMAX = 10,
     PLOT_YMIN = -10,
     PLOT_YMAX = 10;
+const QUERY_INIT = (PLOT_XMAX + PLOT_XMIN) / 2;
 
 const SEGMENT_COLOR = '#0072b2',
     SEGMENT_ENDPOINT_COLOR = '#c25010',
+    SEGMENT_ENDPOINT_SIZE = 3,
     SEGMENT_COLOR_FIXED = '#1f1f1f',
-    SEGMENT_ENDPOINT_COLOR_FIXED = '#1f1f1f';
+    SEGMENT_ENDPOINT_COLOR_FIXED = '#1f1f1f',
+    SEGMENT_ENDPOINT_SIZE_FIXED = 1.5;
 
-type NewSegmentEvent = {
+export type NewSegmentEvent = {
     p1: Readonly<Point>;
     p2: Readonly<Point>;
     l: Readonly<Line>;
 };
-type QueryLineChangeEvent = number;
+export type QueryLineChangeEvent = number;
 
-type Events = {
-    newSegment: NewSegmentEvent;
-    queryLineChange: QueryLineChangeEvent;
-};
-
-export class PlotBoard extends AbstractEventGenerator<Events> {
+/**
+ * Board for drawing and displaying segments,
+ * together with the button for randomly populating segments.
+ */
+export class PlotBoard {
     board: Board;
+    private populatingBtn;
+    private setSortedEndRadios;
+
     private acceptChanges = true; // prevents adding/changing segments
-    private segments: Segment[] = [];
+    segments: Segment[] = [];
 
     private sortingEnd: 'left' | 'right' = 'left';
 
@@ -61,7 +68,21 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
     };
 
     constructor(name: string) {
-        super();
+        this.populatingBtn = $('#populate :input');
+        this.populatingBtn.prop('disabled', false);
+        $('#populate').on('submit', (e) => {
+            this.populateSegments(parseInt($('#populate-count').val() as string));
+            e.preventDefault();
+        });
+
+        this.setSortedEndRadios = $('[name=sort-endpoint]')
+            // events of changing sorted end are self-managed
+            .each((_, ele) => {
+                $(ele).on('change', (event) => this.setSortedEnd($(event.target).val() as 'left' | 'right'));
+            })
+            .prop('disabled', true); // make them initially disabled
+        // synchronize initial value
+        this.setSortedEnd($('[name=sort-endpoint]:checked').val() as 'left' | 'right');
 
         this.board = JSXGraph.initBoard(name, {
             boundingbox: [PLOT_XMIN, PLOT_YMAX, PLOT_XMAX, PLOT_YMIN],
@@ -72,16 +93,16 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
             zoom: { wheel: false },
         });
 
+        // events of creating segments are self-managed
         this.board.on('down', this.startAddingSegmentFunction);
         this.board.on('move', this.moveEndpointWhenAddingFunction);
         this.board.on('up', this.releaseAddingSegmentFunction);
 
-        const initX = (PLOT_XMAX + PLOT_XMIN) / 2;
         this.queryLine = this.board.create(
             'line',
             [
-                [initX, 0],
-                [initX, 1],
+                [QUERY_INIT, 0],
+                [QUERY_INIT, 1],
             ],
             {
                 visible: false,
@@ -92,7 +113,7 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
                 strokeWidth: 3,
             }
         );
-        this.queryLine.on('up', () => this.notify('queryLineChange', this.queryLine.point1.coords.usrCoords[1]));
+        this.queryLine.on('up', () => BUS.emit('queryLineChange', this.queryLine.point1.coords.usrCoords[1]));
     }
 
     private newSegment(coords1: ArrayCoords, coords2: ArrayCoords) {
@@ -101,10 +122,12 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         const p1 = this.board.create('point', coords1, {
                 withLabel: false,
                 color: SEGMENT_ENDPOINT_COLOR,
+                size: SEGMENT_ENDPOINT_SIZE,
             }),
             p2 = this.board.create('point', coords2, {
                 withLabel: false,
                 color: SEGMENT_ENDPOINT_COLOR,
+                size: SEGMENT_ENDPOINT_SIZE,
             }),
             l = this.board.create('segment', [p1, p2], {
                 strokeColor: SEGMENT_COLOR,
@@ -114,37 +137,20 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         p2.on('drag', () => p1.setPosition(JXG.COORDS_BY_USER, [p1.coords.usrCoords[1], p2.coords.usrCoords[2]]));
         this.segments.push(l);
         this.segmentVisibleMedians.set(l.id, new LinkList());
-        this.notify('newSegment', { p1, p2, l });
-        return { p1: p1, p2: p2, l: l };
+        BUS.emit('newSegment', { p1, p2, l });
+        return { p1, p2, l };
     }
 
     private sortSegments() {
-        if (this.segments.length === 1) {
-            const seg = this.segments[0],
-                y = (PLOT_YMAX + PLOT_YMIN) / 2;
-            seg.point1.moveTo([seg.point1.coords.usrCoords[1], y], 400);
-            seg.point2.moveTo([seg.point2.coords.usrCoords[1], y], 400);
-            return;
-        }
-
-        const segIndices = [],
-            segOrder = [];
-        for (let i = 0; i < this.segments.length; i++) segIndices.push(i);
+        const segIndices = [...range(0, this.segments.length)];
         if (this.sortingEnd === 'left') {
             segIndices.sort((i, j) => hrange(this.segments[i]).left - hrange(this.segments[j]).left);
         } else {
             segIndices.sort((i, j) => hrange(this.segments[j]).right - hrange(this.segments[i]).right);
         }
-        for (let i = 0; i < this.segments.length; i++) segOrder[segIndices[i]] = i;
-
-        const yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
-            ystep = yrange / (this.segments.length - 1),
-            ymin = PLOT_YMIN + (PLOT_YMAX - PLOT_YMIN - yrange) / 2,
-            ymax = ymin + yrange;
-
-        for (let i = 0; i < this.segments.length; i++) {
-            const seg = this.segments[i];
-            const y = ymax - ystep * segOrder[i];
+        const [ymin, ymax] = resizeRange(PLOT_YMIN, PLOT_YMAX, 0.9);
+        for (const [i, y] of enumerate(linspace(ymax, ymin, this.segments.length, false, false))) {
+            const seg = this.segments[segIndices[i]];
             seg.point1.moveTo([seg.point1.coords.usrCoords[1], y], 400);
             seg.point2.moveTo([seg.point2.coords.usrCoords[1], y], 400);
         }
@@ -153,6 +159,9 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
     finalizeChanges() {
         if (!this.acceptChanges) return;
         this.acceptChanges = false;
+
+        this.populatingBtn.prop('disabled', true);
+        this.setSortedEndRadios.prop('disabled', false);
 
         this.board.off('down', this.startAddingSegmentFunction);
         this.board.off('move', this.moveEndpointWhenAddingFunction);
@@ -165,10 +174,12 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
                 seg.point1.setAttribute({
                     color: SEGMENT_ENDPOINT_COLOR_FIXED,
                     fixed: true,
+                    size: SEGMENT_ENDPOINT_SIZE_FIXED,
                 });
                 seg.point2.setAttribute({
                     color: SEGMENT_ENDPOINT_COLOR_FIXED,
                     fixed: true,
+                    size: SEGMENT_ENDPOINT_SIZE_FIXED,
                 });
             }
         });
@@ -176,21 +187,12 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         this.sortSegments();
     }
 
-    getSegments() {
-        return this.segments;
-    }
+    private populateSegments(n: number) {
+        const [xmin, xmax] = resizeRange(PLOT_XMIN, PLOT_XMAX, 0.95);
+        const minlength = (xmax - xmin) * 0.04;
+        const [ymin, ymax] = resizeRange(PLOT_YMIN, PLOT_YMAX, 0.9);
 
-    populateSegments(n: number) {
-        const xrange = (PLOT_XMAX - PLOT_XMIN) * 0.95,
-            xmin = (PLOT_XMAX + PLOT_XMIN - xrange) / 2,
-            xmax = xmin + xrange,
-            minlength = xrange * 0.04,
-            yrange = (PLOT_YMAX - PLOT_YMIN) * 0.9,
-            ystep = yrange / (n + 1),
-            ymin = (PLOT_YMAX + PLOT_YMIN - yrange) / 2;
-
-        for (let i = 0; i < n; i++) {
-            const y = ymin + ystep * (i + 1);
+        for (const y of linspace(ymin, ymax, n, false, false)) {
             let x1: number, x2: number;
             do {
                 x1 = random(xmin, xmax);
@@ -202,14 +204,13 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
 
     addMedian(val: number, segments: Segment[], color: string, visible = false, key: number | string | symbol = val) {
         if (this.medians.has(key)) return false;
-        const attrs = { strokeColor: color, dash: 2, visible: false, fixed: true };
         const line: Line = this.board.create(
             'line',
             [
                 [val, 0],
                 [val, 1],
             ],
-            attrs
+            { strokeColor: color, dash: 2, visible: false, fixed: true }
         );
         this.medians.set(key, { line, relatedSegments: segments, color: color });
 
@@ -230,7 +231,6 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
     setMedianVisible(key: number | string | symbol, visible: boolean) {
         const median = this.medians.get(key);
         if (median === undefined || median.line.getAttribute('visible') === visible) return;
-        console.log('setvisible', key, median.color, visible);
 
         median.line.setAttribute({ visible: visible });
         for (const seg of median.relatedSegments) {
@@ -250,7 +250,7 @@ export class PlotBoard extends AbstractEventGenerator<Events> {
         }
     }
 
-    setSortingEnd(end: 'left' | 'right') {
+    private setSortedEnd(end: 'left' | 'right') {
         if (this.sortingEnd !== end) {
             this.sortingEnd = end;
             if (!this.acceptChanges) this.sortSegments();

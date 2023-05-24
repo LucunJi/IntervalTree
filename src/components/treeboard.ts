@@ -1,8 +1,9 @@
 import { Board, JSXGraph, Line, Point } from 'jsxgraph';
 
 import { IntervalTree, TreeNode } from '../model/intervaltree';
-import { AbstractEventGenerator } from '../utils/patterns';
-import { Palette } from '../utils/palette';
+import { linspace, resizeRange } from '../utils/math';
+import { BUS } from '../index';
+import { enumerate } from '../utils/utils';
 
 const TREE_XMIN = -10,
     TREE_XMAX = 10,
@@ -10,12 +11,9 @@ const TREE_XMIN = -10,
     TREE_YMAX = 10;
 const NODE_SIZE = 0.5;
 
-type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
-type Events = {
-    hoverNode: HoverNodeEvent;
-};
+export type HoverNodeEvent = { node?: TreeNode; prevNode?: TreeNode };
 
-export class TreeBoard extends AbstractEventGenerator<Events> {
+export class TreeBoard {
     board: Board;
     private tree: IntervalTree;
     nodes: (Point | undefined)[] = []; // sparse list
@@ -25,9 +23,7 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
 
     private hoveringNode?: TreeNode;
 
-    constructor(name: string, tree: IntervalTree) {
-        super();
-
+    constructor(name: string, tree: IntervalTree, colorCoding: Map<number, string>) {
         this.board = JSXGraph.initBoard(name, {
             boundingbox: [TREE_XMIN, TREE_YMAX, TREE_XMAX, TREE_YMIN],
             showCopyright: false,
@@ -36,7 +32,8 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
             zoom: { wheel: true, needShift: false },
         });
         this.tree = tree;
-        this.drawTree();
+        this.drawTree(colorCoding);
+        this.focusNode(tree.root);
 
         this.board.on('move', () => {
             const prevHovering = this.hoveringNode;
@@ -50,60 +47,36 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
                 }
             }
             if (this.hoveringNode !== prevHovering) {
-                this.notify('hoverNode', { node: this.hoveringNode, prevNode: prevHovering });
+                BUS.emit('mouseOverNode', { node: this.hoveringNode, prevNode: prevHovering });
             }
         });
     }
 
-    private drawTree() {
-        if (this.tree.height === 1) {
-            const coords = [(TREE_XMAX + TREE_XMIN) / 2, (TREE_YMAX + TREE_YMIN) / 2];
-            this.nodes[0] = this.board.create('point', coords, {
-                size: NODE_SIZE,
-                sizeUnit: 'user',
-                withLabel: false,
-                strokeWidth: 4,
-                color: new Palette().get(),
-            }) as Point;
-            return;
-        }
-
-        const xrange = (TREE_XMAX - TREE_XMIN) * 0.95,
-            xmin = TREE_XMIN + (TREE_XMAX - TREE_XMIN - xrange) / 2,
-            yrange = (TREE_YMAX - TREE_YMIN) * 0.8,
-            ymax = TREE_YMAX - (TREE_YMAX - TREE_YMIN - yrange) / 2,
-            ystep = yrange / (this.tree.height - 1);
-
-        const nodesIdxSorted = this.tree.nodes
-            .map((n, i) => (n === undefined ? undefined : i))
-            .filter((i) => i !== undefined)
-            .sort((i, j) => this.tree.nodes[i!]!.median - this.tree.nodes[j!]!.median) as number[];
-        const nodeColors: (string | undefined)[] = [],
-            palette = new Palette();
-        for (const i of nodesIdxSorted) nodeColors[i] = palette.get();
-
-        for (let d = 0; d < this.tree.height; d++) {
-            const y = ymax - d * ystep;
+    /**
+     * Draw the tree layer by layer, without making it visible
+     */
+    private drawTree(colorCoding: Map<number, string>) {
+        const [xmin, xmax] = resizeRange(TREE_XMIN, TREE_XMAX, 0.95);
+        const [ymin, ymax] = resizeRange(TREE_YMIN, TREE_YMAX, 0.8);
+        for (const [d, y] of enumerate(linspace(ymax, ymin, this.tree.height, false, false))) {
             const numNodes = 1 << d;
-            const xstep = xrange / (numNodes + 1);
-
-            for (let i = 0; i < numNodes; i++) {
-                const idx = numNodes - 1 + i,
-                    coords = [xmin + xstep * (i + 1), y];
-
+            for (const [i, x] of enumerate(linspace(xmin, xmax, numNodes, false, false))) {
+                const idx = numNodes - 1 + i;
                 if (this.tree.nodes[idx] !== undefined) {
-                    this.nodes[idx] = this.board.create('point', coords, {
+                    this.nodes[idx] = this.board.create('point', [x, y], {
                         size: NODE_SIZE,
                         sizeUnit: 'user',
                         withLabel: false,
                         strokeWidth: 4,
-                        color: nodeColors[idx],
+                        color: colorCoding.get(this.tree.nodes[idx]!.median),
+                        visible: idx === 0, // the root is initially visible
                     });
                     // connect to parent node
                     if (idx > 0)
                         this.edges[idx] = this.board.create('line', [this.nodes[idx], this.nodes[(idx - 1) >>> 1]], {
                             straightFirst: false,
                             straightLast: false,
+                            visible: false, // all edges are not initially visible
                         });
                 }
             }
@@ -114,31 +87,6 @@ export class TreeBoard extends AbstractEventGenerator<Events> {
         const idx = (1 << node.depth) - 1 + node.peerIdx;
         this.nodes[idx]?.setAttribute({ visible: visible });
         this.edges[idx]?.setAttribute({ visible: visible });
-    }
-
-    setNodeAncestorsVisible(node: TreeNode | undefined, visible: boolean) {
-        while (node !== undefined) {
-            const idx = (1 << node.depth) - 1 + node.peerIdx;
-            this.nodes[idx]?.setAttribute({ visible: visible });
-            this.edges[idx]?.setAttribute({ visible: visible });
-            node = node.parent;
-        }
-    }
-
-    setChildrenVisible(node: TreeNode | undefined, visible: boolean) {
-        this.setSubtreeVisible(node?.childLeft, visible);
-        this.setSubtreeVisible(node?.childRight, visible);
-    }
-
-    setSubtreeVisible(node: TreeNode | undefined, visible: boolean) {
-        if (node === undefined) return;
-
-        const idx = (1 << node.depth) - 1 + node.peerIdx;
-        this.nodes[idx]?.setAttribute({ visible: visible });
-        this.edges[idx]?.setAttribute({ visible: visible });
-
-        this.setSubtreeVisible(node.childLeft, visible);
-        this.setSubtreeVisible(node.childRight, visible);
     }
 
     private setNodeHollow(node: TreeNode | undefined, hollow: boolean) {

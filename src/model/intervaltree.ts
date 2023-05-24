@@ -1,6 +1,6 @@
 import { Segment } from 'jsxgraph';
-import { endpoints, horizontalRelation, hrange } from '../utils/math';
-import { Queue } from 'js-sdsl';
+import { Queue, Stack } from 'js-sdsl';
+import { endpoints, horizontalRelation, hrange } from '../utils/jsxgraph';
 
 export type TreeNode = {
     parent?: TreeNode;
@@ -64,8 +64,8 @@ export class IntervalTree {
             il = 0,
             ir = n - 1;
         for (let cnt = 0; cnt < n; cnt++) {
-            const xl = il >= n ? undefined : endpoints(leftSorted[il]).left.coords.usrCoords[1],
-                xr = ir < 0 ? undefined : endpoints(rightSorted[ir]).right.coords.usrCoords[1];
+            const xl = il >= n ? undefined : endpoints(leftSorted[il])[0].coords.usrCoords[1],
+                xr = ir < 0 ? undefined : endpoints(rightSorted[ir])[1].coords.usrCoords[1];
             if (xr === undefined || (xl as number) < xr) {
                 ret = xl as number;
                 il++;
@@ -95,6 +95,25 @@ export class IntervalTree {
             if (node.childLeft !== undefined) queue.push(node.childLeft);
             if (node.childRight !== undefined) queue.push(node.childRight);
             yield node;
+        }
+    }
+
+    /**
+     * Copied from https://www.geeksforgeeks.org/inorder-tree-traversal-without-recursion as I'm lazy
+     *
+     * Inorder traversal ensures that the medians are traversed in increasing order
+     */
+    *inorder() {
+        const stack = new Stack<TreeNode>();
+        let curr: TreeNode | undefined = this.root;
+        while (curr !== undefined || !stack.empty()) {
+            while (curr !== undefined) {
+                stack.push(curr);
+                curr = curr.childLeft;
+            }
+            curr = stack.pop()!;
+            yield curr;
+            curr = curr.childRight;
         }
     }
 }

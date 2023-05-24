@@ -1,8 +1,8 @@
-import { Line, Segment } from 'jsxgraph';
-
 export type ArrayCoords = [number, number];
 
-// a small number to fix inaccuracy of floating point arithmetic
+/**
+ * a small number to fix inaccuracy of floating point arithmetic
+ */
 export const EPSILON = 1e-12;
 
 /**
@@ -12,29 +12,27 @@ export function random(min: number, max: number) {
     return Math.random() * (max - min) + min;
 }
 
-export function endpoints(line: Line) {
-    return line.point1.coords.usrCoords[1] < line.point2.coords.usrCoords[1]
-        ? { left: line.point1, right: line.point2 }
-        : { left: line.point2, right: line.point1 };
-}
-
-export function hrange(seg: Segment) {
-    const ends = endpoints(seg);
-    return {
-        left: ends.left.coords.usrCoords[1],
-        right: ends.right.coords.usrCoords[1],
-        range: ends.right.coords.usrCoords[1] - ends.left.coords.usrCoords[1],
-    };
+/**
+ * Similar to the function in Numpy with the same name
+ */
+export function linspace(start: number, stop: number, num: number, startpoint = true, endpoint = true): number[] {
+    if (num === 0) return [];
+    if (num === 1) return [startpoint ? start : endpoint ? stop : (start + stop) / 2];
+    const step = (stop - start) / (endpoint && startpoint ? num - 1 : endpoint || startpoint ? num : num + 1);
+    const ret: number[] = [];
+    let val = startpoint ? start : start + step;
+    for (let i = 0; i < num; i++) {
+        ret.push(val);
+        val += step;
+    }
+    return ret;
 }
 
 /**
- * Returns -1, 0, 1 when line is to the left of, intersect with, or to the right of x
+ * Resize a range by a factor
  */
-export function horizontalRelation(line: Line, x: number) {
-    const ps = endpoints(line),
-        x1 = ps.left.coords.usrCoords[1],
-        x2 = ps.right.coords.usrCoords[1];
-    if (x > x2) return -1;
-    else if (x < x1) return 1;
-    else return 0;
+export function resizeRange(lower: number, upper: number, factor: number): [number, number] {
+    const range = (upper - lower) * factor;
+    const u = upper - (upper - lower - range) / 2;
+    return [u - range, u];
 }

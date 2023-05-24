@@ -1,45 +1,9 @@
 import { IntervalTree, TreeNode } from './intervaltree';
-import { AbstractEventGenerator } from '../utils/patterns';
 import { Segment } from 'jsxgraph';
-import { hrange } from '../utils/math';
+import { BUS } from '../index';
+import { hrange } from '../utils/jsxgraph';
+import { AbstractGraphSimulator, SimulationNode } from '../utils/patterns';
 
-/**
- * A simulator has functions for executing user actions and checking feasibility
- */
-interface Simulator<Actions extends string> {
-    canSimulate(action: Actions): boolean;
-
-    simulate(action: Actions): void;
-}
-
-type SimulationNode<Actions extends string> = {
-    actionIdx: Partial<Record<Actions, number>>;
-};
-
-/**
- * Simulates a single task (e.g. build, query) using a graph of finite states
- */
-abstract class AbstractGraphSimulator<Actions extends string, GraphNode extends SimulationNode<Actions>>
-    implements Simulator<Actions>
-{
-    protected constructor(readonly graph: Readonly<GraphNode>[], public index: number) {}
-
-    canSimulate(action: Actions): boolean {
-        return this.graph[this.index].actionIdx[action] !== undefined;
-    }
-
-    simulate(action: Actions): void {
-        if (this.canSimulate(action)) this.index = this.graph[this.index].actionIdx[action]!;
-    }
-
-    currentNode(): Readonly<GraphNode> {
-        return this.graph[this.index];
-    }
-}
-
-/**
- * Actual implementation
- */
 type Actions = 'recurse' | 'undoRecurse' | 'finishSubtree';
 
 class IntervalTreeSimulationNode implements SimulationNode<Actions> {
@@ -53,10 +17,32 @@ class IntervalTreeSimulationNode implements SimulationNode<Actions> {
     ) {}
 }
 
+export type SimulationUpdateEvent = {
+    nodesReveal: Readonly<IntervalTreeSimulationNode>[];
+    nodesHide: Readonly<IntervalTreeSimulationNode>[];
+};
+
+export abstract class IntervalTreeSimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
+    simulate(action: Actions) {
+        const lastIdx = this.index;
+        super.simulate(action);
+        const newIdx = this.index;
+        if (newIdx !== lastIdx) {
+            const event: SimulationUpdateEvent = { nodesReveal: [], nodesHide: [] };
+            if (newIdx > lastIdx) {
+                for (let i = lastIdx + 1; i <= newIdx; i++) event.nodesReveal.push(this.graph[i]);
+            } else {
+                for (let i = newIdx + 1; i <= lastIdx; i++) event.nodesHide.push(this.graph[i]);
+            }
+            BUS.emit('simulationUpdate', event);
+        }
+    }
+}
+
 /**
  * Suitable for the building process of any binary tree
  */
-class BuildingSimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
+export class BuildingSimulator extends IntervalTreeSimulator {
     constructor(tree: IntervalTree) {
         super(BuildingSimulator.buildGraph(tree.root), 0);
     }
@@ -103,7 +89,7 @@ class BuildingSimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimu
     }
 }
 
-class QuerySimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulationNode> {
+export class QuerySimulator extends IntervalTreeSimulator {
     constructor(tree: IntervalTree, query: number) {
         super(QuerySimulator.buildGraph(tree.root, query), 0);
     }
@@ -131,88 +117,5 @@ class QuerySimulator extends AbstractGraphSimulator<Actions, IntervalTreeSimulat
             n = next;
         } while (n !== undefined);
         return graph;
-    }
-}
-
-type States = 'draw' | 'build' | 'query';
-
-type StateChangeEvent<S> = { state: S; prevState: S };
-type AlgorithmResetEvent = { simState: States; algoState: IntervalTreeSimulationNode; tree: IntervalTree };
-type AlgorithmStateChangeEvent = {
-    currState: IntervalTreeSimulationNode;
-    addedTreeNodesSegs: Map<Readonly<TreeNode>, Segment[]>;
-    removedTreeNodesSegs: Map<Readonly<TreeNode>, Segment[]>;
-};
-type Events = {
-    stateChange: StateChangeEvent<States>;
-    algorithmReset: AlgorithmResetEvent;
-    algorithmStateChange: AlgorithmStateChangeEvent;
-};
-
-/**
- * Implementation of simulator for interval tree,
- * as a composition of a building simulator and a query simulator
- */
-export class IntervalTreeSimulator extends AbstractEventGenerator<Events> implements Simulator<Actions> {
-    private state: States = 'draw';
-    tree?: IntervalTree;
-    private simulator?: BuildingSimulator | QuerySimulator;
-
-    /**
-     * Set state and notify update
-     */
-    private setState(state: States) {
-        if (this.state === state) return;
-
-        const prevState = this.state;
-        this.state = state;
-        this.notify('stateChange', { state, prevState });
-    }
-
-    private notifyAlgoReset(simulator: Exclude<typeof this.simulator, undefined>, tree: IntervalTree) {
-        this.notify('algorithmReset', { simState: this.state, algoState: simulator.currentNode(), tree });
-    }
-
-    getState() {
-        return this.state;
-    }
-
-    build(segments: Segment[]) {
-        this.tree = new IntervalTree(segments);
-        this.simulator = new BuildingSimulator(this.tree);
-
-        this.setState('build');
-        this.notifyAlgoReset(this.simulator, this.tree);
-    }
-
-    query(query: number) {
-        if (this.tree === undefined) throw new Error('Tree is not built before query');
-        this.simulator = new QuerySimulator(this.tree, query);
-
-        this.setState('query');
-        this.notifyAlgoReset(this.simulator, this.tree);
-    }
-
-    canSimulate(action: Actions): boolean {
-        return this.simulator !== undefined && this.simulator.canSimulate(action);
-    }
-
-    simulate(action: Actions): void {
-        if (!this.canSimulate(action)) return;
-        const simulator = this.simulator!;
-
-        const oldIdx = simulator.index;
-        simulator.simulate(action);
-        const newIdx = simulator.index;
-
-        const nodes = new Map<Readonly<TreeNode>, Segment[]>();
-        for (let i = Math.min(oldIdx, newIdx) + 1; i <= Math.max(oldIdx, newIdx); i++)
-            nodes.set(simulator.graph[i].treeNode, simulator.graph[i].involvedSegs);
-
-        this.notify('algorithmStateChange', {
-            currState: simulator.currentNode(),
-            addedTreeNodesSegs: newIdx < oldIdx ? new Map() : nodes,
-            removedTreeNodesSegs: newIdx < oldIdx ? nodes : new Map(),
-        });
     }
 }
