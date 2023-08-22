@@ -41,8 +41,8 @@ export class IntervalTree {
         if (n === 0) return undefined; // base case
 
         const median = IntervalTree.medianPoint(linesLeftSorted, linesRightSorted);
-        const { l: ll, m: segmentsLeftSorted, r: lr } = IntervalTree.splitSegmentList(linesLeftSorted, median);
-        const { l: rl, m: segmentsRightSorted, r: rr } = IntervalTree.splitSegmentList(linesLeftSorted, median);
+        const { l: ll, m: segmentsLeftSorted, r: rl } = IntervalTree.splitSegmentList(linesLeftSorted, median);
+        const { l: lr, m: segmentsRightSorted, r: rr } = IntervalTree.splitSegmentList(linesRightSorted, median);
         const depth = parent === undefined ? 0 : parent.depth + 1;
 
         // height = 1 by default for the lowest layer of tree
