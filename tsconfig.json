@@ -1,17 +1,14 @@
 {
-  "compilerOptions": {
-    "outDir": "./dist/",
-    "sourceMap": true,
-    "noImplicitAny": true,
-    "module": "es6",
-    "target": "es5",
-    "allowJs": true,
-    "moduleResolution": "Node",
-    "strictNullChecks": true
-  },
-  "include": [
-    "src/**/*.ts",
-    "algorithm.js"
-  ],
-  "exclude": ["node_modules", ".idea"]
+    "compilerOptions": {
+        "outDir": "./dist/",
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "module": "es6",
+        "target": "es6",
+        "allowJs": true,
+        "moduleResolution": "Node",
+        "strictNullChecks": true
+    },
+    "include": ["src/**/*.ts", "algorithm.js"],
+    "exclude": ["node_modules", ".idea"]
 }
